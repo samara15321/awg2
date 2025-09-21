@@ -6,7 +6,7 @@ on:
         description: "OpenWrt version"
         type: string
         required: true
-        default: "24.10.2"
+        default: "23.05.6"
       amneziawg_version:
         description: "AmneziaWG version"
         type: string
@@ -16,17 +16,17 @@ on:
         description: "OpenWrt arch"
         type: string
         required: true
-        default: "aarch64_cortex-a53"
+        default: "aarch64_generic"
       openwrt_target:
         description: "OpenWrt target"
         type: string
         required: true
-        default: "mediatek"
+        default: "rockchip"
       openwrt_subtarget:
         description: "OpenWrt subtarget"
         type: string
         required: true
-        default: "filogic"
+        default: "armv8"
       update_go:
         description: "Update Go version"
         type: boolean
@@ -61,7 +61,7 @@ jobs:
         if: ${{ inputs.update_go }}
         with:
           path: packages
-          repository: openwrt/packages
+          repository: immortalwrt/immortalwrt
           fetch-depth: 0
 
       - name: Update feeds
@@ -71,9 +71,9 @@ jobs:
           echo "src-cpy awgopenwrt ../amneziawg" >> feeds.conf.default
           ./scripts/feeds update -a
           if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
-            base_url="https://downloads.openwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
           else
-            base_url="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            base_url="https://downloads.immortalwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
           fi
           curl -fsL "$base_url/config.buildinfo" > .config
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y" >> .config
