@@ -6,27 +6,27 @@ on:
         description: "OpenWrt version"
         type: string
         required: true
-        default: "24.10.2"
+        default: "23.05.6"
       amneziawg_version:
         description: "AmneziaWG version"
         type: string
         required: true
-        default: "master"
+        default: "main"
       openwrt_arch:
         description: "OpenWrt arch"
         type: string
         required: true
-        default: "aarch64_cortex-a53"
+        default: "aarch64_generic"
       openwrt_target:
         description: "OpenWrt target"
         type: string
         required: true
-        default: "mediatek"
+        default: "rockchip"
       openwrt_subtarget:
         description: "OpenWrt subtarget"
         type: string
         required: true
-        default: "filogic"
+        default: "armv8"
       update_go:
         description: "Update Go version"
         type: boolean
