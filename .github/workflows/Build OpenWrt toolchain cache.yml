@@ -11,7 +11,7 @@ on:
         description: "AmneziaWG version"
         type: string
         required: true
-        default: "master"
+        default: "main"
       openwrt_arch:
         description: "OpenWrt arch"
         type: string
