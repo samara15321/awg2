@@ -1,4 +1,4 @@
-name: Build AmneziaWG from cache
+name: off Build AmneziaWG from cache
 
 on:
   workflow_dispatch:
