@@ -7,22 +7,22 @@ on:
         description: "OpenWrt version"
         type: string
         required: true
-        default: "24.10.2"
+        default: "23.05.6"
       openwrt_arch:
         description: "OpenWrt arch"
         type: string
         required: true
-        default: "aarch64_cortex-a53"
+        default: "aarch64_generic"
       openwrt_target:
         description: "OpenWrt target"
         type: string
         required: true
-        default: "mediatek"
+        default: "rockchip"
       openwrt_subtarget:
         description: "OpenWrt subtarget"
         type: string
         required: true
-        default: "filogic"
+        default: "armv8"
       compile_kmod:
         description: "Compile kernel module implementation"
         type: boolean
@@ -37,12 +37,12 @@ on:
         description: "Branch for amneziawg-go"
         type: string
         required: false
-        default: "master"
+        default: "main"
       branch_tools:
         description: "Branch for amneziawg-tools"
         type: string
         required: false
-        default: "master"
+        default: "main"
       branch_kmod:
         description: "Branch for kmod-amneziawg"
         type: string
@@ -70,7 +70,7 @@ jobs:
       with:
         path: amneziawg-openwrt
         repository: kozhini/amneziawg-openwrt
-        ref: master
+        ref: main
         fetch-depth: 0
 
     - name: Copy AmneziaWG packages into OpenWrt tree
