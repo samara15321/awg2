@@ -69,7 +69,7 @@ jobs:
       uses: actions/checkout@v5
       with:
         path: amneziawg-openwrt
-        repository: kozhini/amneziawg-openwrt
+        repository: samara15321/awg2
         ref: main
         fetch-depth: 0
 
