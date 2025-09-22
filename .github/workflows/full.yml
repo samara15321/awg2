@@ -69,16 +69,37 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y python3-pyelftools
 
-    - name: Copy AmneziaWG packages into OpenWrt tree
+    - name: Update feeds and .config
       run: |
-        cp -r amneziawg-openwrt/amneziawg-go openwrt/package/
-        cp -r amneziawg-openwrt/amneziawg-tools openwrt/package/
-        cp -r amneziawg-openwrt/luci-proto-amneziawg openwrt/package/
+        cd openwrt
+        # Подключаем AmneziaWG пакеты
+        echo "src-cpy awgopenwrt ../amneziawg-openwrt" >> feeds.conf.default
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+        # Загружаем базовую конфигурацию OpenWrt
+        if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
+          base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+        else
+          base_url="https://downloads.immortalwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+        fi
+        curl -fsL "$base_url/config.buildinfo" > .config
+
+        # Включаем пакеты AmneziaWG
+        echo "CONFIG_PACKAGE_amneziawg-go=y" >> .config
+        echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
+        echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> .config
+
+    - name: Update Go version
+      if: ${{ inputs.compile_go }}
+      run: |
+        cd openwrt
+        rm -rf feeds/packages/lang/golang
+        cp -r ../amneziawg-openwrt/lang/golang feeds/packages/lang
 
     - name: Build toolchain and kernel
       run: |
         cd openwrt
-        ./scripts/feeds update -a
         ./scripts/feeds install -a
         make defconfig
         make tools/install -j $(nproc)
