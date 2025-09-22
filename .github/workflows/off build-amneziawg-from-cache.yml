@@ -23,11 +23,6 @@ on:
         type: string
         required: true
         default: "armv8"
-      compile_kmod:
-        description: "Compile kernel module implementation"
-        type: boolean
-        required: true
-        default: true
       compile_go:
         description: "Compile Go implementation"
         type: boolean
@@ -43,11 +38,6 @@ on:
         type: string
         required: false
         default: "main"
-      branch_kmod:
-        description: "Branch for kmod-amneziawg"
-        type: string
-        required: false
-        default: "feature/awg2"
 
 jobs:
   build-amneziawg:
@@ -79,14 +69,14 @@ jobs:
         cp -r amneziawg-openwrt/amneziawg-go openwrt/package/
         cp -r amneziawg-openwrt/amneziawg-tools openwrt/package/
         cp -r amneziawg-openwrt/luci-proto-amneziawg openwrt/package/
-        cp -r amneziawg-openwrt/kmod-amneziawg openwrt/package/
+        # removed kmod-amneziawg
 
     - name: Update Makefiles to latest commits
       run: |
         set -e -x
         TODAY=$(date +%Y%m%d)
 
-        for PKG in amneziawg-go amneziawg-tools kmod-amneziawg; do
+        for PKG in amneziawg-go amneziawg-tools; do   # removed kmod
           cd "openwrt/package/$PKG"
           MF="Makefile"
           if [ -f "$MF" ]; then
@@ -97,8 +87,6 @@ jobs:
               BRANCH="${{ inputs.branch_go }}"
             elif [ "$PKG" = "amneziawg-tools" ]; then
               BRANCH="${{ inputs.branch_tools }}"
-            else
-              BRANCH="${{ inputs.branch_kmod }}"
             fi
 
             echo "🔄 Updating $PKG from $REPO_URL ($BRANCH)"
@@ -140,7 +128,6 @@ jobs:
 
     - name: Compile AmneziaWG packages
       env:
-        compile_kmod: ${{ inputs.compile_kmod }}
         compile_go: ${{ inputs.compile_go }}
       run: |
         set -e -x
@@ -152,15 +139,11 @@ jobs:
         make package/amneziawg-tools/{clean,download,prepare,compile} -j $(nproc) V=s
 
     - name: Prepare artifacts
-      env:
-        compile_kmod: ${{ inputs.compile_kmod }}
       run: |
         set -e -x
         mkdir awgrelease
         echo "vermagic=$(cat openwrt/build_dir/target-${{ inputs.openwrt_arch }}*/linux-${{ inputs.openwrt_target }}_${{ inputs.openwrt_subtarget }}/linux-*/.vermagic)" > awgrelease/vermagic
-        if [ "${{ env.compile_kmod }}" = "true" ]; then
-          find "openwrt/bin/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}/packages" -maxdepth 1 -type f -name 'kmod-amneziawg*' -exec cp {} awgrelease \;
-        fi
+        # removed copy of kmod
         find "openwrt/bin/packages/${{ inputs.openwrt_arch }}/awgopenwrt" -maxdepth 1 -type f \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} awgrelease \;
 
     - name: Upload artifacts
