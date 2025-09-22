@@ -101,7 +101,7 @@ jobs:
           make defconfig
           make tools/install -j $(nproc)
           make toolchain/install -j $(nproc)
-          make target/linux/compile -j $(nproc) V=s
+          make target/linux/compile -j $(nproc)
           export LC_ALL=C
           for deadlink in $(find . -follow -type l -printf "" 2>&1 | sed -e "s/find: '\(.*\)': Too many levels of symbolic links.*/\1/"); do
             echo "Deleting dead link: ${deadlink}"
