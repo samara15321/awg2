@@ -108,6 +108,13 @@ jobs:
             rm -f "${deadlink}"
           done
 
+      - name: Copy AmneziaWG packages into OpenWrt tree
+        run: |
+          set -e -x
+          cp -r amneziawg-openwrt/amneziawg-go openwrt/package/
+          cp -r amneziawg-openwrt/amneziawg-tools openwrt/package/
+          cp -r amneziawg-openwrt/luci-proto-amneziawg openwrt/package/
+
       - name: Update AmneziaWG Makefiles
         run: |
           TODAY=$(date +%Y%m%d)
