@@ -64,6 +64,12 @@ jobs:
           repository: openwrt/packages
           fetch-depth: 0
 
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+          python3-pyelftools
+
       - name: Update feeds
         run: |
           set -e -x
