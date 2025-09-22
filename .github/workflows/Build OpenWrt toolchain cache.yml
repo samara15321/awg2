@@ -90,7 +90,7 @@ jobs:
         if: ${{ inputs.update_go }}
         run: |
           set -e -x
-          rm -rf openwrt/feeds/packages/lang/golang
+          rm -r openwrt/feeds/packages/lang/golang
           cp -r packages/lang/golang openwrt/feeds/packages/lang
 
       - name: Build toolchain and kernel
