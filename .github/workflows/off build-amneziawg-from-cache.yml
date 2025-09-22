@@ -138,6 +138,28 @@ jobs:
           openwrt/staging_dir/**
           openwrt/tmp/**
 
+    - name: Add fix patch for kmod-amneziawg
+      run: |
+        mkdir -p openwrt/package/kmod-amneziawg/patches
+        cat << 'EOF' > openwrt/package/kmod-amneziawg/patches/010-fix-version-define.patch
+--- a/src/compat/version/linux/version.h
++++ b/src/compat/version/linux/version.h
+@@ -5,8 +5,12 @@
+ #ifndef COMPAT_VERSION
+ #define COMPAT_VERSION 5
+ #endif
+-#define KERNEL_VERSION(a, b, c) (((a) << 24) + ((b) << 16) + (c))
+-#define LINUX_VERSION_CODE KERNEL_VERSION(COMPAT_VERSION, COMPAT_PATCHLEVEL, COMPAT_SUBLEVEL)
++
++#ifndef KERNEL_VERSION
++# define KERNEL_VERSION(a, b, c) (((a) << 24) + ((b) << 16) + (c))
++#endif
++
++#ifndef LINUX_VERSION_CODE
++# define LINUX_VERSION_CODE KERNEL_VERSION(COMPAT_VERSION, COMPAT_PATCHLEVEL, COMPAT_SUBLEVEL)
++#endif
+EOF
+
     - name: Compile AmneziaWG packages
       env:
         compile_kmod: ${{ inputs.compile_kmod }}
