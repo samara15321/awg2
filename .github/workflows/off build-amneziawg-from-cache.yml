@@ -146,13 +146,13 @@ jobs:
         set -e -x
         cd openwrt
         if [ "${{ env.compile_kmod }}" = "true" ]; then
-          make package/kmod-amneziawg/{clean,download,prepare,compile} -j $(nproc)
+          make package/kmod-amneziawg/{clean,download,prepare,compile} -j $(nproc) V=s
         fi
         if [ "${{ env.compile_go }}" = "true" ]; then
-          make package/amneziawg-go/{clean,download,prepare,compile} -j $(nproc)
+          make package/amneziawg-go/{clean,download,prepare,compile} -j $(nproc) V=s
         fi
-        make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j $(nproc)
-        make package/amneziawg-tools/{clean,download,prepare,compile} -j $(nproc)
+        make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j $(nproc) V=s
+        make package/amneziawg-tools/{clean,download,prepare,compile} -j $(nproc) V=s
 
     - name: Prepare artifacts
       env:
