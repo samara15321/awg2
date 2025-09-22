@@ -64,6 +64,12 @@ jobs:
           repository: immortalwrt/packages   # ← правильное репо
           fetch-depth: 0
 
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+          python3-pyelftools
+
       - name: Update feeds
         run: |
           set -e -x
@@ -95,7 +101,7 @@ jobs:
           make defconfig
           make tools/install -j $(nproc)
           make toolchain/install -j $(nproc)
-          make target/linux/compile -j $(nproc)
+          make target/linux/compile -j $(nproc) V=s
           export LC_ALL=C
           for deadlink in $(find . -follow -type l -printf "" 2>&1 | sed -e "s/find: '\(.*\)': Too many levels of symbolic links.*/\1/"); do
             echo "Deleting dead link: ${deadlink}"
