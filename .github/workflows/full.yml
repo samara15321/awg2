@@ -94,7 +94,7 @@ jobs:
       if: ${{ inputs.compile_go }}
       run: |
         cd openwrt
-        rm -rf feeds/packages/lang/golang
+        rm -r feeds/packages/lang/golang
         cp -r ../amneziawg-openwrt/lang/golang feeds/packages/lang
 
     - name: Build toolchain and kernel
