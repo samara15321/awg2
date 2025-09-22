@@ -1,0 +1,20 @@
+--- a/src/compat/version/linux/version.h
++++ b/src/compat/version/linux/version.h
+@@ -5,8 +5,16 @@
+ #define COMPAT_PATCHLEVEL 15
+ #define COMPAT_SUBLEVEL 0
+ 
+-#define KERNEL_VERSION(a, b, c) (((a) << 24) + ((b) << 16) + (c))
+-#define LINUX_VERSION_CODE KERNEL_VERSION(COMPAT_VERSION, COMPAT_PATCHLEVEL, COMPAT_SUBLEVEL)
++#ifdef LINUX_VERSION_CODE
++#undef LINUX_VERSION_CODE
++#endif
++
++#ifdef KERNEL_VERSION
++#undef KERNEL_VERSION
++#endif
++
++#define KERNEL_VERSION(a, b, c) (((a) << 24) + ((b) << 16) + (c))
++#define LINUX_VERSION_CODE KERNEL_VERSION(COMPAT_VERSION, COMPAT_PATCHLEVEL, COMPAT_SUBLEVEL)
+ 
+ #endif /* _COMPAT_LINUX_VERSION_H */
