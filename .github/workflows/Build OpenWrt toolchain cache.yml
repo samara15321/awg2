@@ -56,12 +56,12 @@ jobs:
           ref: ${{ inputs.openwrt_version == 'SNAPSHOT' && 'master' || format('v{0}', inputs.openwrt_version) }}
           fetch-depth: 0
 
-      - name: Checkout OpenWRT Packages repository
+      - name: Checkout ImmortalWrt Packages repository
         uses: actions/checkout@v5
         if: ${{ inputs.update_go }}
         with:
           path: packages
-          repository: immortalwrt/immortalwrt
+          repository: immortalwrt/packages   # ← правильное репо
           fetch-depth: 0
 
       - name: Update feeds
@@ -88,7 +88,7 @@ jobs:
         if: ${{ inputs.update_go }}
         run: |
           set -e -x
-          rm -r openwrt/feeds/packages/lang/golang
+          rm -rf openwrt/feeds/packages/lang/golang
           cp -r packages/lang/golang openwrt/feeds/packages/lang
 
       - name: Build toolchain and kernel
