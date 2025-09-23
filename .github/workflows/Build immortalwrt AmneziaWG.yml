@@ -1,4 +1,4 @@
-name: Build AmneziaWG from cache
+name: Build immortalwrt AmneziaWG
 
 on:
   workflow_dispatch:
