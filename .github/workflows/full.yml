@@ -73,6 +73,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-pyelftools curl
 
+      - name: Copy AmneziaWG packages into OpenWrt tree
+        run: |
+          set -e -x
+          cp -r amneziawg/amneziawg-go openwrt/package/
+          cp -r amneziawg/amneziawg-tools openwrt/package/
+          cp -r amneziawg/luci-proto-amneziawg openwrt/package/
+
       - name: Setup feeds and config
         run: |
           cd openwrt
