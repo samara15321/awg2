@@ -43,6 +43,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 360
     steps:
       - name: Checkout OpenWrt
         uses: actions/checkout@v5
@@ -107,9 +108,7 @@ jobs:
           cd openwrt
           ./scripts/feeds install -a
           make defconfig
-          make tools/install -j$(nproc)
-          make toolchain/install -j$(nproc)
-          make target/linux/compile -j$(nproc)
+          make tools/install -j$(nproc) && make toolchain/install -j$(nproc) && make target/linux/compile  V=s
 
       - name: Update Makefiles to latest commits
         run: |
