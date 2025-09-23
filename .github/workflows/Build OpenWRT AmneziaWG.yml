@@ -1,5 +1,4 @@
-name: off Build AmneziaWG from cache
-
+name: Build OpenWRT AmneziaWG
 on:
   workflow_dispatch:
     inputs:
