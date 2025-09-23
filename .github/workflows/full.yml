@@ -1,4 +1,4 @@
-name: Build AmneziaWG full
+name: Build immortalwrt AmneziaWG (one-shot)
 
 on:
   workflow_dispatch:
@@ -7,12 +7,7 @@ on:
         description: "OpenWrt version"
         type: string
         required: true
-        default: "23.05.6"
-      amneziawg_version:
-        description: "AmneziaWG version"
-        type: string
-        required: true
-        default: "main"
+        default: "24.10.2"
       openwrt_arch:
         description: "OpenWrt arch"
         type: string
@@ -28,28 +23,28 @@ on:
         type: string
         required: true
         default: "armv8"
+      compile_go:
+        description: "Compile Go implementation"
+        type: boolean
+        default: true
+      branch_go:
+        description: "Branch for amneziawg-go"
+        type: string
+        default: "main"
+      branch_tools:
+        description: "Branch for amneziawg-tools"
+        type: string
+        default: "main"
       update_go:
         description: "Update Go version"
         type: boolean
-        required: true
         default: true
 
 jobs:
-  build-toolchain-cache:
-    name: "Build AmneziaWG packages for OpenWrt: ${{ inputs.openwrt_version }} - ${{ inputs.openwrt_arch }} - ${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+  build:
     runs-on: ubuntu-22.04
-    defaults:
-      run:
-        shell: bash
     steps:
-      - name: Checkout YAAWG repository
-        uses: actions/checkout@v5
-        with:
-          path: amneziawg
-          ref: ${{ inputs.amneziawg_version }}
-          fetch-depth: 0
-
-      - name: Checkout OpenWrt repository
+      - name: Checkout OpenWrt
         uses: actions/checkout@v5
         with:
           path: openwrt
@@ -57,7 +52,15 @@ jobs:
           ref: ${{ inputs.openwrt_version == 'SNAPSHOT' && 'master' || format('v{0}', inputs.openwrt_version) }}
           fetch-depth: 0
 
-      - name: Checkout ImmortalWrt Packages repository
+      - name: Checkout AmneziaWG repo
+        uses: actions/checkout@v5
+        with:
+          path: amneziawg
+          repository: samara15321/awg2
+          ref: main
+          fetch-depth: 0
+
+      - name: Checkout ImmortalWrt Packages
         if: ${{ inputs.update_go }}
         uses: actions/checkout@v5
         with:
@@ -65,14 +68,13 @@ jobs:
           repository: immortalwrt/packages
           fetch-depth: 0
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pyelftools
+          sudo apt-get install -y python3-pyelftools curl
 
-      - name: Update feeds
+      - name: Setup feeds and config
         run: |
-          set -e -x
           cd openwrt
           echo "src-cpy awgopenwrt ../amneziawg" >> feeds.conf.default
           ./scripts/feeds update -a
@@ -95,28 +97,16 @@ jobs:
 
       - name: Build toolchain and kernel
         run: |
-          set -e -x
           cd openwrt
           ./scripts/feeds install -a
           make defconfig
-          make tools/install -j $(nproc)
-          make toolchain/install -j $(nproc)
-          make target/linux/compile -j $(nproc)
-          export LC_ALL=C
-          for deadlink in $(find . -follow -type l -printf "" 2>&1 | sed -e "s/find: '\(.*\)': Too many levels of symbolic links.*/\1/"); do
-            echo "Deleting dead link: ${deadlink}"
-            rm -f "${deadlink}"
-          done
+          make tools/install -j$(nproc)
+          make toolchain/install -j$(nproc)
+          make target/linux/compile -j$(nproc)
 
-      - name: Copy AmneziaWG packages into OpenWrt tree
+      - name: Update Makefiles to latest commits
         run: |
           set -e -x
-          cp -r amneziawg-openwrt/amneziawg-go openwrt/package/
-          cp -r amneziawg-openwrt/amneziawg-tools openwrt/package/
-          cp -r amneziawg-openwrt/luci-proto-amneziawg openwrt/package/
-
-      - name: Update AmneziaWG Makefiles
-        run: |
           TODAY=$(date +%Y%m%d)
           for PKG in amneziawg-go amneziawg-tools; do
             cd "openwrt/package/$PKG"
@@ -128,6 +118,7 @@ jobs:
               else
                 BRANCH="${{ inputs.branch_tools }}"
               fi
+              echo "🔄 Updating $PKG from $REPO_URL ($BRANCH)"
               LATEST_COMMIT=$(git ls-remote "$REPO_URL" $BRANCH | cut -f1)
               TMPFILE=$(mktemp)
               curl -L "$REPO_URL/archive/$LATEST_COMMIT.tar.gz" -o "$TMPFILE"
@@ -136,23 +127,26 @@ jobs:
               sed -i "s/^PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=$LATEST_COMMIT/" "$MF"
               sed -i "s/^PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=$LATEST_HASH/" "$MF"
               sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=1.0.$TODAY/" "$MF"
+              grep -E "PKG_VERSION|PKG_SOURCE_VERSION|PKG_MIRROR_HASH" "$MF" || true
             fi
             cd - >/dev/null
           done
 
-      - name: Compile AmneziaWG packages
+      - name: Build AmneziaWG packages
+        env:
+          compile_go: ${{ inputs.compile_go }}
         run: |
           cd openwrt
-          if [ "${{ inputs.compile_go }}" = "true" ]; then
-            make package/amneziawg-go/{clean,download,prepare,compile} -j $(nproc) V=s
+          if [ "${{ env.compile_go }}" = "true" ]; then
+            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc) V=s
           fi
-          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j $(nproc) V=s
-          make package/amneziawg-tools/{clean,download,prepare,compile} -j $(nproc) V=s
+          make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc) V=s
+          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc) V=s
 
-      - name: Prepare artifacts
+      - name: Collect artifacts
         run: |
           mkdir awgrelease
-          find "openwrt/bin/packages/${{ inputs.openwrt_arch }}/awgopenwrt" -maxdepth 1 -type f \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} awgrelease \;
+          find "openwrt/bin/packages/${{ inputs.openwrt_arch }}/awgopenwrt" -maxdepth 1 -type f -name '*.ipk' -exec cp {} awgrelease \;
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
