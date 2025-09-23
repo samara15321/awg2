@@ -81,6 +81,16 @@ jobs:
           cp -r amneziawg/amneziawg-tools openwrt/package/
           cp -r amneziawg/luci-proto-amneziawg openwrt/package/
 
+      - name: Cache Tools and Toolchain
+        id: cache-tools-toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            openwrt/staging_dir
+            openwrt/build_dir/host
+            openwrt/build_dir/toolchain-*
+          key: ${{ runner.os }}-openwrt-cache-toolchain-kernel-${{ inputs.openwrt_version }}-${{ inputs.openwrt_arch }}-${{ inputs.openwrt_target }}-${{ inputs.openwrt_subtarget }}
+
       - name: Setup feeds and config
         run: |
           cd openwrt
