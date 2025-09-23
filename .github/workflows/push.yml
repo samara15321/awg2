@@ -1,4 +1,4 @@
-name: Build OpenWrt toolchain cache
+name: Push Build OpenWrt toolchain cache
 
 on:
   push:
