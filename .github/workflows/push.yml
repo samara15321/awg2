@@ -58,7 +58,7 @@ jobs:
         with:
           path: openwrt
           repository: immortalwrt/immortalwrt
-          ref: ${{ matrix.build_env.openwrt_version == 'SNAPSHOT' && 'master' || format('v{0}', matrix.build_env.openwrt_version) }}
+          ref: ${{ inputs.openwrt_version == 'SNAPSHOT' && 'master' || format('v{0}', inputs.openwrt_version) }}
           fetch-depth: 0
 
       - name: Checkout ImmortalWrt Packages repository
