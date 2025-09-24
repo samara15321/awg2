@@ -148,6 +148,14 @@ jobs:
             cd - >/dev/null
           done
 
+      - name: Download AmneziaWG sources
+        run: |
+          cd openwrt
+          if [ "${{ inputs.compile_go }}" = "true" ]; then
+            make package/amneziawg-go/download V=s
+          fi
+          make package/amneziawg-tools/download V=s
+
       - name: Build AmneziaWG packages
         env:
           compile_go: ${{ inputs.compile_go }}
