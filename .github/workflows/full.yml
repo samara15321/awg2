@@ -43,7 +43,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360
     steps:
       - name: Checkout OpenWrt
         uses: actions/checkout@v5
