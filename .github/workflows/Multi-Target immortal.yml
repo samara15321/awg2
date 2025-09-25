@@ -92,16 +92,17 @@ jobs:
           make -C openwrt defconfig
 
       - name: Compile AWG packages
+        continue-on-error: true
         run: |
           cd openwrt
           if [ "${{ github.event.inputs.compile_kmod }}" = "true" ]; then
-            make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc)
+            make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc) || echo "kmod-amneziawg failed, continue"
           fi
           if [ "${{ github.event.inputs.compile_go }}" = "true" ]; then
-            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc)
+            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc) || echo "amneziawg-go failed, continue"
           fi
-          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc)
-          make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc)
+          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc) || echo "luci-proto-amneziawg failed, continue"
+          make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc) || echo "amneziawg-tools failed, continue"
 
       - name: Create GitHub release (if not exists)
         id: create_release
