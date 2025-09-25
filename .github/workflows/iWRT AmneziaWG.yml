@@ -1,0 +1,154 @@
+name: iWRT AmneziaWG
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: "OpenWrt version"
+        type: string
+        required: true
+        default: "24.10.3"
+      amneziawg_version:
+        description: "AmneziaWG version"
+        type: string
+        required: true
+        default: "main"
+      openwrt_arch:
+        description: "OpenWrt arch"
+        type: string
+        required: true
+        default: "aarch64_generic"
+      openwrt_target:
+        description: "OpenWrt target"
+        type: string
+        required: true
+        default: "rockchip"
+      openwrt_subtarget:
+        description: "OpenWrt subtarget"
+        type: string
+        required: true
+        default: "armv8"
+      compile_kmod:
+        description: "Compile kernel module"
+        type: boolean
+        required: true
+        default: true
+      compile_go:
+        description: "Compile Go implementation"
+        type: boolean
+        required: true
+        default: true
+
+jobs:
+  build-amneziawg:
+    name: "Build AmneziaWG ${{ inputs.openwrt_version }} - ${{ inputs.openwrt_arch }}"
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - name: Checkout AmneziaWG
+      uses: actions/checkout@v5
+      with:
+        path: amneziawg
+        ref: ${{ inputs.amneziawg_version }}
+        fetch-depth: 0
+
+    - name: Checkout OpenWrt Packages
+      if: ${{ inputs.compile_go }}
+      uses: actions/checkout@v5
+      with:
+        path: packages
+        repository: immortalwrt/packages
+        fetch-depth: 0
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pyelftools python3-dev python3-setuptools swig curl tar zstd
+
+    - name: Download and prepare SDK
+      run: |
+        set -e -x
+        if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
+            base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+        else
+            base_url="https://downloads.immortalwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+        fi
+
+        sdk_url=$(curl -s "${base_url}/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' | sed -e 's/href="//' -e 's/"$//' | head -n1)
+        if [[ -z "$sdk_url" && "${{ inputs.openwrt_version }}" != "SNAPSHOT" ]]; then
+            base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            sdk_url=$(curl -s "${base_url}/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' | sed -e 's/href="//' -e 's/"$//' | head -n1)
+        fi
+
+        if [[ -z "$sdk_url" ]]; then
+            echo "SDK not found!"
+            exit 1
+        fi
+
+        curl -fsLO "${base_url}/${sdk_url}"
+        tar -xf $(basename "$sdk_url")
+        rm -f $(basename "$sdk_url")
+        mv *sdk-* openwrt
+
+        echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
+        ./openwrt/scripts/feeds update -a
+
+        curl -fsL "$base_url/config.buildinfo" > openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y"          >> openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y"  >> openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y"      >> openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-amneziawg=y"                    >> openwrt/.config
+        echo "CONFIG_PACKAGE_amneziawg-go=y"                      >> openwrt/.config
+        echo "CONFIG_PACKAGE_amneziawg-tools=y"                   >> openwrt/.config
+        echo "CONFIG_PACKAGE_luci-proto-amneziawg=y"              >> openwrt/.config
+
+        if [ "${{ inputs.compile_go }}" = "true" ]; then
+            rm -rf openwrt/feeds/packages/lang/golang
+            cp -r packages/lang/golang openwrt/feeds/packages/lang
+        fi
+
+        ./openwrt/scripts/feeds install -a
+        make -C openwrt defconfig
+
+    - name: Compile AmneziaWG
+      run: |
+        set -e -x
+        cd openwrt
+        if [ "${{ inputs.compile_kmod }}" = "true" ]; then
+          make package/kmod-amneziawg/{clean,download,prepare,compile} -j $(nproc)
+        fi
+        if [ "${{ inputs.compile_go }}" = "true" ]; then
+          make package/amneziawg-go/{clean,download,prepare,compile} -j $(nproc)
+        fi
+        make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j $(nproc)
+        make package/amneziawg-tools/{clean,download,prepare,compile} -j $(nproc)
+
+    - name: Prepare release archive
+      run: |
+        mkdir awgrelease
+        find "openwrt/bin/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}/packages" -maxdepth 1 -type f -name 'kmod-amneziawg*' -exec cp {} awgrelease \;
+        find "openwrt/bin/packages/${{ inputs.openwrt_arch }}/awgopenwrt" -maxdepth 1 -type f \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} awgrelease \;
+        tar -czvf awgrelease.tar.gz -C awgrelease .
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: "AmneziaWG ${{ github.ref_name }}"
+        draft: false
+        prerelease: false
+        body: "Automatic build of AmneziaWG for OpenWrt ${{ inputs.openwrt_version }}"
+
+    - name: Upload release asset
+      uses: actions/upload-release-asset@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./awgrelease.tar.gz
+        asset_name: "amneziawg-${{ inputs.openwrt_version }}-${{ inputs.openwrt_arch }}.tar.gz"
+        asset_content_type: application/gzip
