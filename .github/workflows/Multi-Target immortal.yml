@@ -41,10 +41,11 @@ jobs:
       - name: Generate build matrix
         id: set-matrix
         run: |
-          MATRIX=$(node index.js ${{ github.event.inputs.openwrt_version }})
-          # Приводим JSON к одной строке
-          MATRIX_SINGLE_LINE=$(echo $MATRIX | tr -d '\n')
-          echo "matrix=$MATRIX_SINGLE_LINE" >> $GITHUB_OUTPUT
+          MATRIX=$(node index.js ${{ github.event.inputs.openwrt_version }} | tr -d '\n' | tr -d '\r')
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+      - name: Debug matrix
+        run: echo "${{ needs.generate-matrix.outputs.matrix }}"
 
   build-awg:
     needs: generate-matrix
