@@ -47,45 +47,45 @@ async function getSubtargets(target) {
 async function getDetails(target, subtarget) {
   const packagesUrl = `${url}${target}/${subtarget}/packages/`;
   const $ = await fetchHTML(packagesUrl);
-  let vermagic = '';
   let pkgarch = '';
 
   $('a').each((index, element) => {
     const name = $(element).attr('href');
     if (name && name.startsWith('kernel_')) {
-      const vermagicMatch = name.match(/kernel_\d+\.\d+\.\d+(?:-\d+)?[-~]([a-f0-9]+)(?:-r\d+)?_([a-zA-Z0-9_-]+)\.ipk$/);
-      if (vermagicMatch) {
-        vermagic = vermagicMatch[1];
-        pkgarch = vermagicMatch[2];
+      const match = name.match(/kernel_\d+\.\d+\.\d+(?:-\d+)?[-~][a-f0-9]+_([a-zA-Z0-9_-]+)\.ipk$/);
+      if (match) {
+        pkgarch = match[1];
       }
     }
   });
 
-  return { vermagic, pkgarch };
+  // Если не нашли pkgarch, ставим placeholder
+  if (!pkgarch) pkgarch = "unknown";
+
+  return { pkgarch };
 }
 
 async function main() {
   try {
     const targets = await getTargets();
-    const jobConfig = [];
+    const matrix = [];
 
     for (const target of targets) {
       const subtargets = await getSubtargets(target);
       for (const subtarget of subtargets) {
-        const { vermagic, pkgarch } = await getDetails(target, subtarget);
+        const { pkgarch } = await getDetails(target, subtarget);
 
-        jobConfig.push({
-          tag: version,
+        // Добавляем только поля, которые будут использоваться в matrix
+        matrix.push({
           target,
           subtarget,
-          vermagic,
-          pkgarch,
+          pkgarch
         });
       }
     }
 
-    // Выводим JSON в stdout, чтобы workflow мог его использовать
-    console.log(JSON.stringify(jobConfig));
+    // Выводим JSON в stdout одной строкой
+    console.log(JSON.stringify(matrix));
 
   } catch (error) {
     console.error(error);
