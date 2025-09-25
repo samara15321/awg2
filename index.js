@@ -1,7 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const version = process.argv[2]; // версия OpenWrt
+const version = process.argv[2];
 if (!version) {
   console.error('Version argument is required');
   process.exit(1);
@@ -45,8 +45,7 @@ async function getPkgarch(target, subtarget) {
     }
   });
 
-  if (!pkgarch) pkgarch = 'unknown';
-  return pkgarch;
+  return pkgarch || 'unknown';
 }
 
 async function main() {
@@ -62,7 +61,7 @@ async function main() {
       }
     }
 
-    // выводим одну строку JSON
+    // вывод JSON одной строкой
     console.log(JSON.stringify(matrix));
 
   } catch (err) {
