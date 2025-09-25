@@ -37,16 +37,32 @@ async function getPkgarch(target, subtarget) {
   const $ = await fetchHTML(packagesUrl);
 
   let pkgarch = '';
+
+  // ищем первый не-kernel .ipk (обычно правильный arch)
   $('a').each((i, el) => {
     const name = $(el).attr('href');
-    if (name && name.endsWith('.ipk')) {
-      const parts = name.split('_');
-      if (parts.length >= 3) {
-        pkgarch = parts[2].replace('.ipk','');
+    if (name && name.endsWith('.ipk') && !name.startsWith('kernel_')) {
+      const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
+      if (match) {
+        pkgarch = match[1];
         return false; // break
       }
     }
   });
+
+  // fallback: если ничего не нашли, пробуем kernel_*
+  if (!pkgarch) {
+    $('a').each((i, el) => {
+      const name = $(el).attr('href');
+      if (name && name.startsWith('kernel_')) {
+        const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
+        if (match) {
+          pkgarch = match[1];
+          return false;
+        }
+      }
+    });
+  }
 
   return pkgarch || 'unknown';
 }
@@ -64,7 +80,7 @@ async function main() {
       }
     }
 
-    // формируем объект для GitHub Actions
+    // вывод для GitHub Actions
     console.log(JSON.stringify({ include: matrix }));
 
   } catch (err) {
