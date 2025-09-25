@@ -1,0 +1,118 @@
+name: Multi-Target Build AmneziaWG
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: "OpenWrt version"
+        required: true
+        default: "24.10.3"
+      amneziawg_version:
+        description: "AmneziaWG version"
+        required: true
+        default: "main"
+      compile_kmod:
+        description: "Compile kernel module"
+        required: true
+        type: boolean
+        default: true
+      compile_go:
+        description: "Compile Go implementation"
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install axios cheerio @actions/core
+
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX=$(node scripts/get-openwrt-targets.js ${{ github.event.inputs.openwrt_version }})
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  build-awg:
+    needs: generate-matrix
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: amneziawg
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pyelftools python3-dev python3-setuptools swig curl tar zstd
+
+      - name: Download and prepare SDK
+        run: |
+          set -e -x
+          VERSION="${{ github.event.inputs.openwrt_version }}"
+          TARGET="${{ matrix.target }}"
+          SUBTARGET="${{ matrix.subtarget }}"
+
+          if [ "$VERSION" = "SNAPSHOT" ]; then
+            BASE_URL="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
+          else
+            BASE_URL="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+          fi
+
+          SDK_URL=$(curl -s "$BASE_URL/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' | sed -e 's/href="//' -e 's/"$//' | head -n1)
+          curl -fsLO "$BASE_URL/$SDK_URL"
+          tar -xf $(basename "$SDK_URL")
+          rm -f $(basename "$SDK_URL")
+          mv *sdk-* openwrt
+
+          echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
+          ./openwrt/scripts/feeds update -a
+
+          curl -fsL "$BASE_URL/config.buildinfo" > openwrt/.config
+          echo "CONFIG_PACKAGE_kmod-amneziawg=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
+
+          ./openwrt/scripts/feeds install -a
+          make -C openwrt defconfig
+
+      - name: Compile AWG packages
+        run: |
+          cd openwrt
+          if [ "${{ github.event.inputs.compile_kmod }}" = "true" ]; then
+            make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc)
+          fi
+          if [ "${{ github.event.inputs.compile_go }}" = "true" ]; then
+            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc)
+          fi
+          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc)
+          make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc)
+
+      - name: Prepare release artifact
+        run: |
+          mkdir -p awgrelease
+          find "openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages" -maxdepth 1 -type f -name 'kmod-amneziawg*' -exec cp {} awgrelease \;
+          find "openwrt/bin/packages/${{ matrix.pkgarch }}/awgopenwrt" -maxdepth 1 -type f \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} awgrelease \;
+          tar -czvf awgrelease-${{ matrix.target }}-${{ matrix.subtarget }}.tar.gz -C awgrelease .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./awgrelease-${{ matrix.target }}-${{ matrix.subtarget }}.tar.gz
+          asset_name: "awg-${{ matrix.target }}-${{ matrix.subtarget }}.tar.gz"
+          asset_content_type: application/gzip
