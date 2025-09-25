@@ -41,7 +41,7 @@ jobs:
       - name: Generate build matrix
         id: set-matrix
         run: |
-          MATRIX=$(node scripts/get-openwrt-targets.js ${{ github.event.inputs.openwrt_version }})
+          MATRIX=$(node index.js ${{ github.event.inputs.openwrt_version }})
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   build-awg:
