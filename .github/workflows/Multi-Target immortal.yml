@@ -36,13 +36,14 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install axios cheerio
+        run: |
+            npm install axios cheerio
 
       - name: Generate build matrix
         id: set-matrix
         run: |
-          MATRIX=$(node index.js ${{ github.event.inputs.openwrt_version }})
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+            MATRIX=$(node index.js ${{ github.event.inputs.openwrt_version }})
+            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   build-awg:
     needs: generate-matrix
@@ -57,68 +58,63 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-pyelftools python3-dev python3-setuptools swig curl zip
+            sudo apt-get update
+            sudo apt-get install -y python3-pyelftools python3-dev python3-setuptools swig curl zip
 
       - name: Download and prepare SDK
         run: |
-          set -e -x
-          VERSION="${{ github.event.inputs.openwrt_version }}"
-          TARGET="${{ matrix.target }}"
-          SUBTARGET="${{ matrix.subtarget }}"
+            set -e -x
+            VERSION="${{ github.event.inputs.openwrt_version }}"
+            TARGET="${{ matrix.target }}"
+            SUBTARGET="${{ matrix.subtarget }}"
 
-          if [ "$VERSION" = "SNAPSHOT" ]; then
-            BASE_URL="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
-          else
-            BASE_URL="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-          fi
+            if [ "$VERSION" = "SNAPSHOT" ]; then
+                BASE_URL="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
+            else
+                BASE_URL="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+            fi
 
-          SDK_URL=$(curl -s "$BASE_URL/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' | sed -e 's/href="//' -e 's/"$//' | head -n1)
-          curl -fsLO "$BASE_URL/$SDK_URL"
-          tar -xf $(basename "$SDK_URL")
-          rm -f $(basename "$SDK_URL")
-          mv *sdk-* openwrt
+            SDK_URL=$(curl -s "$BASE_URL/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' | sed -e 's/href="//' -e 's/"$//' | head -n1)
+            curl -fsLO "$BASE_URL/$SDK_URL"
+            tar -xf $(basename "$SDK_URL")
+            rm -f $(basename "$SDK_URL")
+            mv *sdk-* openwrt
 
-          echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
-          ./openwrt/scripts/feeds update -a
+            echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
+            ./openwrt/scripts/feeds update -a
 
-          curl -fsL "$BASE_URL/config.buildinfo" > openwrt/.config
-          echo "CONFIG_PACKAGE_kmod-amneziawg=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
+            curl -fsL "$BASE_URL/config.buildinfo" > openwrt/.config
+            echo "CONFIG_PACKAGE_kmod-amneziawg=y" >> openwrt/.config
+            echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
+            echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
+            echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
 
-          ./openwrt/scripts/feeds install -a
-          make -C openwrt defconfig
+            ./openwrt/scripts/feeds install -a
+            make -C openwrt defconfig
 
       - name: Compile AWG packages
         continue-on-error: true
         run: |
-          cd openwrt
-          if [ "${{ github.event.inputs.compile_kmod }}" = "true" ]; then
-            make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc) || echo "kmod-amneziawg failed, continue"
-          fi
-          if [ "${{ github.event.inputs.compile_go }}" = "true" ]; then
-            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc) || echo "amneziawg-go failed, continue"
-          fi
-          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc) || echo "luci-proto-amneziawg failed, continue"
-          make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc) || echo "amneziawg-tools failed, continue"
-
-      - name: Create GitHub release (if not exists)
-        id: create_release
-        uses: actions/create-release@v1
-        with:
-          tag_name: "${{ github.event.inputs.openwrt_version }}"
-          release_name: "Immortal AWG ${{ github.event.inputs.openwrt_version }}"
-          draft: false
-          prerelease: false
+            cd openwrt
+            if [ "${{ github.event.inputs.compile_kmod }}" = "true" ]; then
+                make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc) || echo "kmod-amneziawg failed, continue"
+            fi
+            if [ "${{ github.event.inputs.compile_go }}" = "true" ]; then
+                make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc) || echo "amneziawg-go failed, continue"
+            fi
+            make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc) || echo "luci-proto-amneziawg failed, continue"
+            make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc) || echo "amneziawg-tools failed, continue"
 
       - name: Prepare and upload ZIP artifact
         run: |
-          mkdir -p awgrelease
-          find "openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages" -maxdepth 1 -type f -name 'kmod-amneziawg*' -exec cp {} awgrelease \;
-          find "openwrt/bin/packages/${{ matrix.pkgarch }}/awgopenwrt" -maxdepth 1 -type f \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} awgrelease \;
-          ZIP_NAME="immortal-awg-${{ github.event.inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}.zip"
-          zip -r "$ZIP_NAME" awgrelease
-          
-          gh release upload "${{ github.event.inputs.openwrt_version }}" "$ZIP_NAME" --clobber
+            mkdir -p awgrelease
+            find "openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages" -maxdepth 1 -type f -name 'kmod-amneziawg*' -exec cp {} awgrelease \;
+            find "openwrt/bin/packages/${{ matrix.pkgarch }}/awgopenwrt" -maxdepth 1 -type f \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} awgrelease \;
+            ZIP_NAME="immortal-awg-${{ github.event.inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}.zip"
+            zip -r "$ZIP_NAME" awgrelease
+
+            # Создаем релиз или загружаем в существующий
+            gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+            TAG="${{ github.event.inputs.openwrt_version }}"
+            gh release create "$TAG" --title "Immortal AWG $TAG" --notes "Build from workflow" || echo "Release already exists"
+            gh release upload "$TAG" "$ZIP_NAME" --clobber
