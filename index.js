@@ -1,11 +1,10 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const core = require('@actions/core');
 
 const version = process.argv[2]; // Получение версии OpenWRT из аргумента командной строки
 
 if (!version) {
-  core.setFailed('Version argument is required');
+  console.error('Version argument is required');
   process.exit(1);
 }
 
@@ -85,9 +84,12 @@ async function main() {
       }
     }
 
-    core.setOutput('job-config', JSON.stringify(jobConfig));
+    // Выводим JSON в stdout, чтобы workflow мог его использовать
+    console.log(JSON.stringify(jobConfig));
+
   } catch (error) {
-    core.setFailed(error.message);
+    console.error(error);
+    process.exit(1);
   }
 }
 
