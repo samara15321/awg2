@@ -74,15 +74,18 @@ jobs:
       run: |
         set -e -x
 
+        # Определяем базовый URL
         if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
             base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
         else
             base_url="https://downloads.immortalwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
         fi
 
+        # Ищем SDK
         sdk_url=$(curl -s "${base_url}/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' \
                   | sed -e 's/href="//' -e 's/"$//' | head -n1)
 
+        # Если не нашли в релизе — пробуем SNAPSHOT
         if [[ -z "$sdk_url" && "${{ inputs.openwrt_version }}" != "SNAPSHOT" ]]; then
             echo "SDK not found for release, trying SNAPSHOT..."
             base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
@@ -95,25 +98,36 @@ jobs:
             exit 1
         fi
 
+        # Качаем и распаковываем SDK
         curl -fsLO "${base_url}/${sdk_url}"
         file_name=$(basename "$sdk_url")
         tar -xf "$file_name"
         rm -f "$file_name"
 
+        # Папка SDK может называться openwrt-sdk-* или immortalwrt-sdk-*
+        mv *sdk-* openwrt
+
+        # Подключаем feed для AmneziaWG
         echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
         ./openwrt/scripts/feeds update -a
+
+        # Загружаем базовый .config и включаем нужные пакеты
         curl -fsL "$base_url/config.buildinfo" > openwrt/.config
-        echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y" >> openwrt/.config
-        echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y" >> openwrt/.config
-        echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y" >> openwrt/.config
-        echo "CONFIG_PACKAGE_kmod-amneziawg=y" >> openwrt/.config
-        echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
-        echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
-        echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y"          >> openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y"  >> openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y"      >> openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-amneziawg=y"                    >> openwrt/.config
+        echo "CONFIG_PACKAGE_amneziawg-go=y"                      >> openwrt/.config
+        echo "CONFIG_PACKAGE_amneziawg-tools=y"                   >> openwrt/.config
+        echo "CONFIG_PACKAGE_luci-proto-amneziawg=y"              >> openwrt/.config
+
+        # При необходимости заменяем golang
         if [ "${{ env.compile_go }}" = "true" ]; then
-          rm -r openwrt/feeds/packages/lang/golang
-          cp -r packages/lang/golang openwrt/feeds/packages/lang
+            rm -rf openwrt/feeds/packages/lang/golang
+            cp -r packages/lang/golang openwrt/feeds/packages/lang
         fi
+
+        # Устанавливаем feeds и генерим дефолтный конфиг
         ./openwrt/scripts/feeds install -a
         make -C openwrt defconfig
   
