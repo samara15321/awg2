@@ -42,10 +42,9 @@ jobs:
         id: set-matrix
         run: |
           MATRIX=$(node index.js ${{ github.event.inputs.openwrt_version }} | tr -d '\n' | tr -d '\r')
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-
-      - name: Debug matrix
-        run: echo "${{ needs.generate-matrix.outputs.matrix }}"
+          # Экранируем кавычки
+          MATRIX_ESCAPED="${MATRIX//\"/\\\"}"
+          echo "matrix=\"${MATRIX_ESCAPED}\"" >> $GITHUB_OUTPUT
 
   build-awg:
     needs: generate-matrix
