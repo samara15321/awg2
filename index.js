@@ -1,8 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const version = process.argv[2]; // Получение версии OpenWRT из аргумента командной строки
-
+const version = process.argv[2]; // версия OpenWrt
 if (!version) {
   console.error('Version argument is required');
   process.exit(1);
@@ -11,58 +10,43 @@ if (!version) {
 const url = `https://downloads.immortalwrt.org/releases/${version}/targets/`;
 
 async function fetchHTML(url) {
-  try {
-    const { data } = await axios.get(url);
-    return cheerio.load(data);
-  } catch (error) {
-    console.error(`Error fetching HTML for ${url}: ${error}`);
-    throw error;
-  }
+  const { data } = await axios.get(url);
+  return cheerio.load(data);
 }
 
 async function getTargets() {
   const $ = await fetchHTML(url);
-  const targets = [];
-  $('table tr td.n a').each((index, element) => {
-    const name = $(element).attr('href');
-    if (name && name.endsWith('/')) {
-      targets.push(name.slice(0, -1));
-    }
-  });
-  return targets;
+  return $('table tr td.n a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/'))
+    .map(href => href.slice(0, -1));
 }
 
 async function getSubtargets(target) {
   const $ = await fetchHTML(`${url}${target}/`);
-  const subtargets = [];
-  $('table tr td.n a').each((index, element) => {
-    const name = $(element).attr('href');
-    if (name && name.endsWith('/')) {
-      subtargets.push(name.slice(0, -1));
-    }
-  });
-  return subtargets;
+  return $('table tr td.n a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/'))
+    .map(href => href.slice(0, -1));
 }
 
-async function getDetails(target, subtarget) {
+async function getPkgarch(target, subtarget) {
   const packagesUrl = `${url}${target}/${subtarget}/packages/`;
   const $ = await fetchHTML(packagesUrl);
   let pkgarch = '';
 
-  $('a').each((index, element) => {
-    const name = $(element).attr('href');
+  $('a').each((i, el) => {
+    const name = $(el).attr('href');
     if (name && name.startsWith('kernel_')) {
       const match = name.match(/kernel_\d+\.\d+\.\d+(?:-\d+)?[-~][a-f0-9]+_([a-zA-Z0-9_-]+)\.ipk$/);
-      if (match) {
-        pkgarch = match[1];
-      }
+      if (match) pkgarch = match[1];
     }
   });
 
-  // Если не нашли pkgarch, ставим placeholder
-  if (!pkgarch) pkgarch = "unknown";
-
-  return { pkgarch };
+  if (!pkgarch) pkgarch = 'unknown';
+  return pkgarch;
 }
 
 async function main() {
@@ -73,22 +57,16 @@ async function main() {
     for (const target of targets) {
       const subtargets = await getSubtargets(target);
       for (const subtarget of subtargets) {
-        const { pkgarch } = await getDetails(target, subtarget);
-
-        // Добавляем только поля, которые будут использоваться в matrix
-        matrix.push({
-          target,
-          subtarget,
-          pkgarch
-        });
+        const pkgarch = await getPkgarch(target, subtarget);
+        matrix.push({ target, subtarget, pkgarch });
       }
     }
 
-    // Выводим JSON в stdout одной строкой
+    // выводим одну строку JSON
     console.log(JSON.stringify(matrix));
 
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
     process.exit(1);
   }
 }
