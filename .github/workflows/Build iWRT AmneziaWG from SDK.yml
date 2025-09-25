@@ -78,7 +78,7 @@ jobs:
         else
           base_url="https://downloads.immortalwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
         fi
-        sdk_url=$(curl -s "${base_url}" | grep -oP 'href="openwrt-sdk[^"]+\.tar\.zst"' | sed -e 's/href="//' -e 's/"$//' | head -n1)
+        sdk_url=$(curl -s "${base_url}" | grep -oP 'href="immortalwrt-sdk[^"]+\.tar\.zst"' | sed -e 's/href="//' -e 's/"$//' | head -n1)
         if [[ -z "$sdk_url" ]]; then
           echo "SDK file not found."
           exit 1
