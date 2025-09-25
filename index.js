@@ -35,13 +35,16 @@ async function getSubtargets(target) {
 async function getPkgarch(target, subtarget) {
   const packagesUrl = `${url}${target}/${subtarget}/packages/`;
   const $ = await fetchHTML(packagesUrl);
-  let pkgarch = '';
 
+  let pkgarch = '';
   $('a').each((i, el) => {
     const name = $(el).attr('href');
-    if (name && name.startsWith('kernel_')) {
-      const match = name.match(/kernel_\d+\.\d+\.\d+(?:-\d+)?[-~][a-f0-9]+_([a-zA-Z0-9_-]+)\.ipk$/);
-      if (match) pkgarch = match[1];
+    if (name && name.endsWith('.ipk')) {
+      const parts = name.split('_');
+      if (parts.length >= 3) {
+        pkgarch = parts[2].replace('.ipk','');
+        return false; // break
+      }
     }
   });
 
@@ -61,7 +64,7 @@ async function main() {
       }
     }
 
-    // выводим объект с ключом include для GitHub Actions
+    // формируем объект для GitHub Actions
     console.log(JSON.stringify({ include: matrix }));
 
   } catch (err) {
