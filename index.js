@@ -50,18 +50,29 @@ async function getPkgarch(target, subtarget) {
 
 async function main() {
   try {
+    const targetsArr = [];
+    const subtargetsArr = [];
+    const pkgarchArr = [];
+
     const targets = await getTargets();
-    const matrix = [];
 
     for (const target of targets) {
       const subtargets = await getSubtargets(target);
       for (const subtarget of subtargets) {
         const pkgarch = await getPkgarch(target, subtarget);
-        matrix.push({ target, subtarget, pkgarch });
+        targetsArr.push(target);
+        subtargetsArr.push(subtarget);
+        pkgarchArr.push(pkgarch);
       }
     }
 
-    // вывод JSON одной строкой
+    // Выводим объект с массивами — GitHub Actions принимает это в matrix
+    const matrix = {
+      target: targetsArr,
+      subtarget: subtargetsArr,
+      pkgarch: pkgarchArr
+    };
+
     console.log(JSON.stringify(matrix));
 
   } catch (err) {
