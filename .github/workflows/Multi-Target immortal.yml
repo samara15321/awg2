@@ -85,9 +85,9 @@ jobs:
             fi
 
             sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1)
-            curl -fsLO "$BASE_URL/$SDK_URL"
-            tar -xf $(basename "$SDK_URL")
-            rm -f $(basename "$SDK_URL")
+            curl -fsLO "$BASE_URL/$sdk_url"
+            tar -xf "$(basename "$sdk_url")"
+            rm -f "$(basename "$sdk_url")"
             mv *sdk-* openwrt
 
             echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
