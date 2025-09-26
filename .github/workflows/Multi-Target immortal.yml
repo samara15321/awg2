@@ -105,24 +105,25 @@ jobs:
             make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc) || echo "luci-proto-amneziawg failed, continue"
             make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc) || echo "amneziawg-tools failed, continue"
 
-      - name: Prepare and upload ZIP artifact
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload release assets
         run: |
-          mkdir -p awgrelease
-          
-          # kmod пакеты
-          cp -f openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages/kmod-amneziawg* awgrelease/ 2>/dev/null || true
-          
-          # все ipk из pkgarch (без лишней вложенности)
-          cp -f openwrt/bin/packages/${{ matrix.pkgarch }}/*amneziawg* awgrelease/ 2>/dev/null || true
-          
-          ZIP_NAME="immortal-awg-${{ github.event.inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}.zip"
-          
-          if [ "$(ls -A awgrelease)" ]; then
-            zip -r "$ZIP_NAME" awgrelease
-            gh release create "${{ github.event.inputs.openwrt_version }}" --title "Immortal AWG ${{ github.event.inputs.openwrt_version }}" --notes "Build from workflow" || echo "Release already exists"
-            gh release upload "${{ github.event.inputs.openwrt_version }}" "$ZIP_NAME" --clobber
-          else
-            echo "⚠️ Пакеты не найдены, архив не создан"
-          fi
+            mkdir -p awgrelease
+            cp -f openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages/kmod-amneziawg* awgrelease/ 2>/dev/null || true
+            cp -f openwrt/bin/packages/${{ matrix.pkgarch }}/*amneziawg* awgrelease/ 2>/dev/null || true
+
+            ZIP_NAME="immortal-awg-${{ github.event.inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}.zip"
+
+            if [ "$(ls -A awgrelease)" ]; then
+              zip -r "$ZIP_NAME" awgrelease
+              gh release create "${{ github.event.inputs.openwrt_version }}" \
+                --title "Immortal AWG ${{ github.event.inputs.openwrt_version }}" \
+                --notes "Build from workflow" \
+                --repo "${{ github.repository }}" || echo "Release already exists"
+              gh release upload "${{ github.event.inputs.openwrt_version }}" "$ZIP_NAME" \
+                --clobber \
+                --repo "${{ github.repository }}"
+            else
+              echo "⚠️ Пакеты не найдены, архив не создан"
+            fi
+        env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
