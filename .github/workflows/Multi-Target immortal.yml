@@ -56,12 +56,22 @@ jobs:
         with:
           path: amneziawg
 
+      - name: Checkout OpenWRT Packages repository
+        uses: actions/checkout@v5
+        if: ${{ github.event.inputs.openwrt_version }}
+        with:
+          path: packages
+          repository: immortalwrt/packages
+          fetch-depth: 0
+
       - name: Install dependencies
         run: |
             sudo apt-get update
             sudo apt-get install -y python3-pyelftools python3-dev python3-setuptools swig curl zip
 
       - name: Download and prepare SDK
+        env:
+          compile_go: ${{ inputs.compile_go }}
         run: |
             set -e -x
             VERSION="${{ github.event.inputs.openwrt_version }}"
@@ -83,11 +93,20 @@ jobs:
             echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
             ./openwrt/scripts/feeds update -a
 
-            curl -fsL "$BASE_URL/config.buildinfo" > openwrt/.config
-            echo "CONFIG_PACKAGE_kmod-amneziawg=y" >> openwrt/.config
-            echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
-            echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
-            echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
+            curl -fsL "$base_url/config.buildinfo" > openwrt/.config
+            echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y"          >> openwrt/.config
+            echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y"  >> openwrt/.config
+            echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y"      >> openwrt/.config
+            echo "CONFIG_PACKAGE_kmod-amneziawg=y"                    >> openwrt/.config
+            echo "CONFIG_PACKAGE_amneziawg-go=y"                      >> openwrt/.config
+            echo "CONFIG_PACKAGE_amneziawg-tools=y"                   >> openwrt/.config
+            echo "CONFIG_PACKAGE_luci-proto-amneziawg=y"              >> openwrt/.config
+
+            # При необходимости заменяем golang
+            if [ "${{ env.compile_go }}" = "true" ]; then
+                rm -rf openwrt/feeds/packages/lang/golang
+                cp -r packages/lang/golang openwrt/feeds/packages/lang
+            fi
 
             ./openwrt/scripts/feeds install -a
             make -C openwrt defconfig
