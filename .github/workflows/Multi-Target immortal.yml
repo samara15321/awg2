@@ -112,11 +112,8 @@ jobs:
             # kmod пакеты
             cp -f openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages/kmod-amneziawg* awgrelease/ 2>/dev/null || true
 
-            # основные ipk из фида awgopenwrt
-            cp -f openwrt/bin/packages/${{ matrix.pkgarch }}/awgopenwrt/*amneziawg* awgrelease/ 2>/dev/null || true
-
-            # перевод для LuCI
-            cp -f openwrt/bin/packages/${{ matrix.pkgarch }}/awgopenwrt/luci-i18n-amneziawg-ru* awgrelease/ 2>/dev/null || true
+            # все amneziawg пакеты (включая -go, -tools, luci и i18n)
+            find "openwrt/bin/packages/${{ matrix.pkgarch }}/" -maxdepth 2 -type f -name '*amneziawg*' -exec cp {} awgrelease/ \; 2>/dev/null || true
 
             ZIP_NAME="immortal-awg-${{ github.event.inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}.zip"
 
