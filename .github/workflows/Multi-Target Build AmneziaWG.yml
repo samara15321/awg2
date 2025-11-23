@@ -38,7 +38,7 @@ jobs:
       - name: Generate build matrix
         id: set-matrix
         run: |
-          MATRIX=$(node index.js ${{ inputs.openwrt_version }})
+          MATRIX=$(node index.js "${{ inputs.openwrt_version }}")
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   check-zip:
@@ -93,43 +93,42 @@ jobs:
         env:
           compile_go: ${{ inputs.compile_go }}
         run: |
-            set -e -x
-            VERSION="${{ github.event.inputs.openwrt_version }}"
-            TARGET="${{ matrix.target }}"
-            SUBTARGET="${{ matrix.subtarget }}"
+          set -e -x
+          VERSION="${{ inputs.openwrt_version }}"
+          TARGET="${{ matrix.target }}"
+          SUBTARGET="${{ matrix.subtarget }}"
 
-            if [ "$VERSION" = "SNAPSHOT" ]; then
-                BASE_URL="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
-            else
-                BASE_URL="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-            fi
+          if [ "$VERSION" = "SNAPSHOT" ]; then
+            BASE_URL="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
+          else
+            BASE_URL="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+          fi
 
-            sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1)
-            curl -fsLO "$BASE_URL/$sdk_url"
-            tar -xf "$(basename "$sdk_url")"
-            rm -f "$(basename "$sdk_url")"
-            mv *sdk-* openwrt
+          sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1)
+          curl -fsLO "$BASE_URL/$sdk_url"
+          tar -xf "$(basename "$sdk_url")"
+          rm -f "$(basename "$sdk_url")"
+          mv *sdk-* openwrt
 
-            echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
-            ./openwrt/scripts/feeds update -a
+          echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
+          ./openwrt/scripts/feeds update -a
 
-            curl -fsL "$BASE_URL/config.buildinfo" > openwrt/.config
-            echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y"          >> openwrt/.config
-            echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y"  >> openwrt/.config
-            echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y"      >> openwrt/.config
-            echo "CONFIG_PACKAGE_kmod-amneziawg=y"                    >> openwrt/.config
-            echo "CONFIG_PACKAGE_amneziawg-go=y"                      >> openwrt/.config
-            echo "CONFIG_PACKAGE_amneziawg-tools=y"                   >> openwrt/.config
-            echo "CONFIG_PACKAGE_luci-proto-amneziawg=y"              >> openwrt/.config
+          curl -fsL "$BASE_URL/config.buildinfo" > openwrt/.config
+          echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_kmod-amneziawg=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
+          echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
 
-            # При необходимости заменяем golang
-            if [ "${{ env.compile_go }}" = "true" ]; then
-                rm -rf openwrt/feeds/packages/lang/golang
-                cp -r packages/lang/golang openwrt/feeds/packages/lang
-            fi
+          if [ "${{ env.compile_go }}" = "true" ]; then
+            rm -rf openwrt/feeds/packages/lang/golang
+            cp -r packages/lang/golang openwrt/feeds/packages/lang
+          fi
 
-            ./openwrt/scripts/feeds install -a
-            make -C openwrt defconfig
+          ./openwrt/scripts/feeds install -a
+          make -C openwrt defconfig
 
       - name: Compile AWG packages
         env:
