@@ -9,82 +9,71 @@ jobs:
   sync-releases:
     runs-on: ubuntu-latest
     outputs:
-      release_tag: ${{ steps.set_tag.outputs.cleaned_tag }}
-      can_proceed: ${{ steps.check_metadata.outputs.can_proceed }}
+      release_tag: ${{ steps.get_release.outputs.release_tag }}
+      can_build: ${{ steps.check_metadata.outputs.can_build }}
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # полный fetch для пуша
 
       - name: Get the latest OpenWrt release tag
         id: get_release
         run: |
-          RAW_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/tags | jq -r '.[0].name')
-          echo "raw_tag=$RAW_TAG" >> $GITHUB_OUTPUT
+          RELEASE_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/tags | jq -r '.[0].name')
+          # Убираем ведущую v, если есть
+          RELEASE_TAG="${RELEASE_TAG#v}"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Clean tag (remove leading 'v' if present)
-        id: set_tag
-        run: |
-          RAW="${{ steps.get_release.outputs.raw_tag }}"
-          CLEANED="${RAW#v}"
-          echo "cleaned_tag=$CLEANED" >> $GITHUB_OUTPUT
-
-      - name: Check saved release tag and age
+      - name: Check saved release tag and timestamp
         id: check_metadata
         run: |
-          CURRENT_TAG="${{ steps.set_tag.outputs.cleaned_tag }}"
-          CAN_PROCEED="false"
+          echo "Checking saved release metadata..."
+          CAN_BUILD="false"
+          CURRENT_TAG="${{ steps.get_release.outputs.release_tag }}"
 
           if [ -f saved_release_metadata.txt ]; then
             IFS=',' read SAVED_TAG SAVED_DATE < saved_release_metadata.txt
+            echo "Saved Tag: $SAVED_TAG, Saved Date: $SAVED_DATE"
+            echo "Latest Tag: $CURRENT_TAG"
 
             if [ "$SAVED_TAG" == "$CURRENT_TAG" ]; then
-              # Преобразуем дату в метку времени
               SAVED_EPOCH=$(date -d "$SAVED_DATE" +%s)
-              NOW_EPOCH=$(date +%s)
-              AGE_HOURS=$(( (NOW_EPOCH - SAVED_EPOCH) / 3600 ))
+              CURRENT_EPOCH=$(date +%s)
+              AGE_HOURS=$(( (CURRENT_EPOCH - SAVED_EPOCH) / 3600 ))
 
-              if (( AGE_HOURS > 75 )); then
-                CAN_PROCEED="true"
-                echo "Tag matches but older than 75 hours — will build."
+              if (( AGE_HOURS <= 75 )); then
+                echo "Tag matches and is not older than 75 hours — build allowed."
+                CAN_BUILD="true"
               else
-                echo "Tag matches and is fresh — skipping build."
+                echo "Tag matches but older than 75 hours — skipping build."
               fi
             else
-              CAN_PROCEED="true"
-              echo "Tag differs — will build."
+              echo "Tag changed — first run, saving new tag without building."
             fi
           else
-            CAN_PROCEED="true"
-            echo "No saved_release_metadata.txt — first run, will build."
+            echo "No saved release metadata found — first run, saving new tag."
           fi
 
-          echo "can_proceed=$CAN_PROCEED" >> $GITHUB_OUTPUT
+          echo "can_build=$CAN_BUILD" >> $GITHUB_OUTPUT
 
-      - name: Debug
-        run: |
-          echo "Current cleaned tag: ${{ steps.set_tag.outputs.cleaned_tag }}"
-          echo "Can proceed: ${{ steps.check_metadata.outputs.can_proceed }}"
-
-      - name: Save RELEASE_TAG and current DATE to file
-        if: steps.check_metadata.outputs.can_proceed == 'true'
+      - name: Save release tag and current date
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-          CURRENT_TAG="${{ steps.set_tag.outputs.cleaned_tag }}"
+          CURRENT_TAG="${{ steps.get_release.outputs.release_tag }}"
           CURRENT_DATE=$(date "+%Y-%m-%d %H:%M:%S")
           echo "$CURRENT_TAG,$CURRENT_DATE" > saved_release_metadata.txt
 
           git add saved_release_metadata.txt
-          git commit -m "Update release metadata with tag and date" || echo "No changes to commit"
-          git push origin main
+          git commit -m "Update saved release metadata with tag and date" || echo "No changes to commit"
+          git push
 
   build-awg:
     needs: sync-releases
-    if: needs.sync-releases.outputs.can_proceed == 'true'
+    if: needs.sync-releases.outputs.can_build == 'true'
     uses: ./.github/workflows/Multi-Target Build AmneziaWG.yml
     with:
       openwrt_version: ${{ needs.sync-releases.outputs.release_tag }}
