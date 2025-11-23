@@ -91,7 +91,7 @@ jobs:
 
       - name: Download and prepare SDK
         env:
-          compile_go: ${{ inputs.compile_go }}
+          compile_go:  "${{ inputs.compile_go }}"
         run: |
           set -e -x
           VERSION="${{ inputs.openwrt_version }}"
@@ -132,8 +132,8 @@ jobs:
 
       - name: Compile AWG packages
         env:
-          compile_kmod: ${{ inputs.compile_kmod }}
-          compile_go:  ${{ inputs.compile_go }}
+           compile_kmod: "${{ inputs.compile_kmod }}"
+           compile_go:  "${{ inputs.compile_go }}"
         continue-on-error: true
         run: |
           cd openwrt
