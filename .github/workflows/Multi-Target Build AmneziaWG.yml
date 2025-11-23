@@ -133,19 +133,28 @@ jobs:
 
       - name: Compile AWG packages
         env:
-           compile_kmod: "${{ inputs.compile_kmod }}"
-           compile_go:  "${{ inputs.compile_go }}"
-        continue-on-error: true
+          compile_kmod: ${{ inputs.compile_kmod }}
+          compile_go: ${{ inputs.compile_go }}
         run: |
-          cd openwrt
-          if [ "$compile_kmod" = "true" ]; then
-            make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc)
-          fi
-          if [ "$compile_go" = "true" ]; then
-            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc)
-          fi
-          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc)
-          make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc)
+            cd openwrt
+
+            set +e
+
+            if [ "$compile_kmod" = "true" ]; then
+                  make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc) \
+                        || echo "kmod-amneziawg failed, continue"
+            fi
+
+            if [ "$compile_go" = "true" ]; then
+                  make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc) \
+                        || echo "amneziawg-go failed, continue"
+            fi
+
+            make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc) \
+                  || echo "luci-proto-amneziawg failed, continue"
+
+            make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc) \
+                  || echo "amneziawg-tools failed, continue"
 
       - name: Upload release assets
         env:
