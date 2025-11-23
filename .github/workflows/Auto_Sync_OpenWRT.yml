@@ -22,7 +22,9 @@ jobs:
         id: get_release
         run: |
           RELEASE_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/tags | jq -r '.[0].name')
-          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          # убираем ведущую 'v', если она есть
+          RELEASE_TAG_NO_V="${RELEASE_TAG#v}"
+          echo "release_tag=$RELEASE_TAG_NO_V" >> $GITHUB_OUTPUT
 
       - name: Compare saved release tag
         id: check_metadata
