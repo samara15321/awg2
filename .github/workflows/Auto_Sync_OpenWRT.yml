@@ -11,9 +11,12 @@ jobs:
     outputs:
       release_tag: ${{ steps.get_release.outputs.release_tag }}
       new_tag: ${{ steps.check_metadata.outputs.new_tag }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # полный fetch для пуша
 
       - name: Get the latest OpenWrt release tag
         id: get_release
@@ -24,8 +27,8 @@ jobs:
       - name: Compare saved release tag
         id: check_metadata
         run: |
-          NEW_TAG="false"
           CURRENT="${{ steps.get_release.outputs.release_tag }}"
+          NEW_TAG="false"
 
           if [ -f saved_release_metadata.txt ]; then
             SAVED=$(cut -d',' -f1 saved_release_metadata.txt)
@@ -38,6 +41,11 @@ jobs:
 
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
+      - name: Debug
+        run: |
+          echo "Current tag: ${{ steps.get_release.outputs.release_tag }}"
+          echo "New tag: ${{ steps.check_metadata.outputs.new_tag }}"
+
       - name: Save new tag
         if: steps.check_metadata.outputs.new_tag == 'true'
         run: |
@@ -48,7 +56,7 @@ jobs:
           echo "${{ steps.get_release.outputs.release_tag }},$DATE" > saved_release_metadata.txt
 
           git add saved_release_metadata.txt
-          git commit -m "Update saved release tag"
+          git commit -m "Update saved release tag" || echo "No changes to commit"
           git push
 
   build-awg:
