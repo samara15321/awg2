@@ -67,7 +67,7 @@ jobs:
           fi  
 
   build-awg:
-    needs: check-zip
+    needs: [generate-matrix, check-zip]
     if: needs.check-zip.outputs.build_needed == 'true'
     runs-on: ubuntu-22.04
     strategy:
