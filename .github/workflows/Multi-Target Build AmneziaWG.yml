@@ -41,15 +41,18 @@ jobs:
                           MATRIX=$(node index.js "${{ inputs.openwrt_version }}")
                           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
-      check-zip:
-            needs: generate-matrix
-            runs-on: ubuntu-latest
+      build-awg:
+            needs: [generate-matrix]
+            if: needs.check-zip.outputs.build_needed == 'true'
+            runs-on: ubuntu-22.04
             strategy:
                   fail-fast: false
                   matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-            outputs:
-                  build_needed: ${{ steps.set_build_needed.outputs.build_needed }}
             steps:
+                  - uses: actions/checkout@v4
+                    with:
+                          path: amneziawg
+
                   - name: Install jq
                     run: sudo apt-get update && sudo apt-get install -y jq
 
@@ -64,18 +67,6 @@ jobs:
                                 echo "build_needed=false" >> $GITHUB_OUTPUT
                           else
                                 echo "build_needed=true" >> $GITHUB_OUTPUT
-
-      build-awg:
-            needs: [generate-matrix, check-zip]
-            if: needs.check-zip.outputs.build_needed == 'true'
-            runs-on: ubuntu-22.04
-            strategy:
-                  fail-fast: false
-                  matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-            steps:
-                  - uses: actions/checkout@v4
-                    with:
-                          path: amneziawg
 
                   - name: Checkout OpenWRT Packages repository
                     uses: actions/checkout@v4
