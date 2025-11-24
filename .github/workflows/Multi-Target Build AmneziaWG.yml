@@ -59,8 +59,9 @@ jobs:
           ZIP_NAME="immortal-awg-2-${{ inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.pkgarch }}.zip"
           echo "Checking release for $ZIP_NAME"
 
+          # Грузим JSON, но если assets нет — делаем пустой массив []
           ASSETS=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ inputs.openwrt_version }}" \
-            | jq -r '.assets[].name')
+            | jq -r '.assets // empty | .[].name')
 
           echo "Assets in release:"
           echo "$ASSETS"
