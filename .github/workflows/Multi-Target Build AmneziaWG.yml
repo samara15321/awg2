@@ -20,60 +20,77 @@ on:
         default: true
 
 jobs:
-  # 1. Генерируем матрицу целей
+  # 1. Генерируем полную матрицу целей
   generate-matrix:
     runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install dependencies
-        run: npm install axios cheerio
-
+      - run: npm install axios cheerio
       - name: Generate build matrix
         id: set-matrix
         run: |
           MATRIX=$(node index.js "${{ inputs.openwrt_version }}")
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
-  # 2. Один раз проверяем, какие ZIP-ы уже есть в релизе
+  # 2. Фильтруем матрицу — оставляем только те, которых ещё нет в релизе
   check-existing-assets:
     needs: generate-matrix
     runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.filter.outputs.matrix }}
     steps:
-      - name: Download list of existing assets
+      - name: Get existing ZIPs from release
         id: get-assets
         run: |
           if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
-            echo "skip_check=true" >> $GITHUB_OUTPUT
+            echo "skip=true" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ inputs.openwrt_version }}" \
-            | jq -r '.assets[].name // empty')
+            | jq -r '.assets[].name | select(startswith("immortal-awg-2-"))' > existing.txt || true
 
-          echo "$ASSETS" > existing_assets.txt
-          cat existing_assets.txt
-
-      - name: Filter matrix — leave only targets that need build
+      - name: Filter matrix – only targets that need to be built
         id: filter
         run: |
-          MATRIX='${{ needs.generate-matrix.outputs.matrix }}'
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          ORIGINAL='${{ needs.generate-matrix.outputs.matrix }}'
 
-  # 3. Сама сборка
+          # Если SNAPSHOT — собираем всё
+          if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
+            echo "matrix=$ORIGINAL" >> $GITHUB_OUTPUT
+            echo "SNAPSHOT → build all targets"
+            exit 0
+          fi
+
+          # Если релиз не найден или нет файлов — тоже собираем всё
+          if [ ! -s existing.txt ]; then
+            echo "matrix=$ORIGINAL" >> $GITHUB_OUTPUT
+            echo "No existing ZIPs found → build all targets"
+            exit 0
+          fi
+
+          # Надёжная фильтрация через jq
+          FILTERED=$(jq -c --slurpfile existing existing.txt '
+            .include |= map(select(
+              "immortal-awg-2-${{ inputs.openwrt_version }}-\(.target)-\(.subtarget)-\(.pkgarch).zip" as $zip
+              | $existing[] | IN($zip) | not
+            ))
+          ' <<< "$ORIGINAL")
+
+          echo "matrix=$FILTERED" >> $GITHUB_OUTPUT
+          echo "Targets left to build: $(jq '.include | length' <<< "$FILTERED")"
+
+  # 3. Сборка только нужных целей
   build-awg:
     needs: [generate-matrix, check-existing-assets]
-    if: ${{ needs.check-existing-assets.outputs.matrix != '{"include":[]}' || inputs.openwrt_version == 'SNAPSHOT' }}
+    if: ${{ inputs.openwrt_version == 'SNAPSHOT' || needs.check-existing-assets.outputs.matrix != '{"include":[]}' }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -85,11 +102,11 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y python3-pyelftools python3-dev python3-setuptools \
             swig curl zip zstd jq unzip build-essential libelf-dev
 
-      - name: Checkout ImmortalWrt packages (для свежего golang)
+      - name: Checkout fresh golang from immortalwrt/packages
         uses: actions/checkout@v4
         with:
           repository: immortalwrt/packages
@@ -97,93 +114,68 @@ jobs:
 
       - name: Download and prepare SDK
         env:
-          compile_go: "${{ inputs.compile_go }}"
+          compile_go: ${{ inputs.compile_go }}
         run: |
-          set -e -x
+          set -e
           VERSION="${{ inputs.openwrt_version }}"
           TARGET="${{ matrix.target }}"
           SUBTARGET="${{ matrix.subtarget }}"
 
           if [ "$VERSION" = "SNAPSHOT" ]; then
-            BASE_URL="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
+            BASE="https://downloads.immortalwrt.org/snapshots"
           else
-            BASE_URL="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+            BASE="https://downloads.immortalwrt.org/releases/$VERSION"
           fi
 
-          sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1)
-          curl -fsLO "$BASE_URL/$sdk_url"
-          tar -xf "$(basename "$sdk_url")"
-          rm -f "$(basename "$sdk_url")"
-          mv *sdk-* openwrt
+          URL="$BASE/targets/$TARGET/$SUBTARGET"
+          SDK=$(curl -s "$URL/" | grep -o 'immortalwrt-sdk.*\.\(tar\.xz\|tar\.zst\)' | head -1)
+          curl -L "$URL/$SDK" -o sdk.archive
 
-          echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
+          if [[ $SDK == *.zst ]]; then
+            unzstd sdk.archive
+            tar -xf "${SDK%.zst}"
+          else
+            tar -xf sdk.archive
+          fi
+          rm -f sdk.archive
+          mv immortalwrt-sdk* openwrt
+
+          echo "src-link awg ../amneziawg" >> openwrt/feeds.conf.default
+          # или src-cpy — как у тебя в пакете
           ./openwrt/scripts/feeds update -a
-
-          curl -fsL "$BASE_URL/config.buildinfo" > openwrt/.config
-          echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_kmod-amneziawg=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
-          echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
-
-          if [ "${{ env.compile_go }}" = "true" ]; then
-            rm -rf openwrt/feeds/packages/lang/golang
-            cp -r packages/lang/golang openwrt/feeds/packages/lang
-          fi
-
           ./openwrt/scripts/feeds install -a
-          make -C openwrt defconfig
 
-      - name: Compile AWG packages
-        env:
-          compile_go: ${{ inputs.compile_go }}
-        run: |
-          cd openwrt
-          set +e
-
-          make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc)
-          KMOD_STATUS=$?
-
-          make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc)
-          TOOLS_STATUS=$?
-
-          make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc)
-          LUCI_STATUS=$?
+          cat > openwrt/.config <<EOF
+          CONFIG_PACKAGE_kmod-amneziawg=y
+          CONFIG_PACKAGE_amneziawg-tools=y
+          CONFIG_PACKAGE_luci-proto-amneziawg=y
+          CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y
+          EOF
+          ${{ inputs.compile_go == 'true' }} && echo "CONFIG_PACKAGE_amneziawg-go=y" >> openwrt/.config
 
           if [ "$compile_go" = "true" ]; then
-            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc) \
-              || echo "amneziawg-go failed — continuing anyway"
+            rm -rf openwrt/feeds/packages/lang/golang
+            cp -r packages/lang/golang openwrt/feeds/packages/lang/
+            ./openwrt/scripts/feeds update -a
           fi
 
-          if [ $KMOD_STATUS -ne 0 ] || [ $LUCI_STATUS -ne 0 ] || [ $TOOLS_STATUS -ne 0 ]; then
-            echo "One or more REQUIRED packages failed"
-            exit 1
-          fi
+          make -C openwrt defconfig
 
-          echo "All required packages built successfully"
-
-      - name: Upload release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compile packages
         run: |
-          mkdir -p awgrelease
+          cd openwrt
+          make package/kmod-amneziawg/compile -j$(nproc) V=s
+          make package/amneziawg-tools/compile -j$(nproc) V=s
+          make package/luci-proto-amneziawg/compile -j$(nproc) V=s
+          ${{ inputs.compile_go == 'true' }} && make package/amneziawg-go/compile -j$(nproc) V=s || true
 
-          cp -f openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages/kmod-amneziawg* awgrelease/ 2>/dev/null || true
-          find "openwrt/bin/packages/${{ matrix.pkgarch }}/" -maxdepth 2 -type f -name '*amneziawg*' -exec cp {} awgrelease/ \; 2>/dev/null || true
+      - name: Upload ZIP to release
+        run: |
+          mkdir release
+          cp openwrt/bin/targets/${{ matrix.target }}/${{ matrix.subtarget }}/packages/kmod-amneziawg_* release/ 2>/dev/null || true
+          cp openwrt/bin/packages/${{ matrix.pkgarch }}/*/*amneziawg* release/ 2>/dev/null || true
 
-          ZIP_NAME="immortal-awg-2-${{ inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.pkgarch }}.zip"
+          ZIP="immortal-awg-2-${{ inputs.openwrt_version }}-${{ matrix.target }}-${{ matrix.subtarget }}-${{ matrix.pkgarch }}.zip"
+          zip -j "$ZIP" release/*
 
-          if [ -n "$(ls -A awgrelease)" ]; then
-            zip -r "$ZIP_NAME" awgrelease
-
-            gh release create "${{ inputs.openwrt_version }}" \
-              --title "Immortal AWG-2.0 - ${{ inputs.openwrt_version }}" \
-              --notes "AmneziaWG 2.0 ImmortalWRT build" \
-              --repo "${{ github.repository }}" || true
-
-            gh release upload "${{ inputs.openwrt_version }}" "$ZIP_NAME" --clobber --repo "${{ github.repository }}"
-          else
-            echo "Пакеты не найдены, ZIP не создан"
-          fi
+          gh release upload "${{ inputs.openwrt_version }}" "$ZIP" --clobber
