@@ -72,24 +72,24 @@ jobs:
         run: |
           ORIGINAL='${{ needs.generate-matrix.outputs.matrix }}'
 
-          # Если это SNAPSHOT — собираем всё
+          # SNAPSHOT — собираем всё
           if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
             echo "matrix=$ORIGINAL" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Получаем список уже загруженных ZIP-ов (один запрос!)
+          # Получаем список уже загруженных ZIP-ов
           mapfile -t EXISTING < <(
             curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ inputs.openwrt_version }}" \
-              | jq -r '.assets[].name' 2>/dev/null || true
+              | jq -r '.assets[].name' 2>/dev/null || echo ""
           )
 
-          # Фильтруем матрицу: оставляем только те, которых ещё нет
+          # Фильтруем: оставляем только те ZIP-ы, которых ЕЩЁ НЕТ в релизе
           FILTERED=$(jq -c --args '
             .include |= map(select(
               "immortal-awg-2-${{ inputs.openwrt_version }}-\(.target)-\(.subtarget)-\(.pkgarch).zip" as $zip
-              | ($args[] | select(. == $zip) | empty
+              | ($args[] | contains($zip)) | not
             ))
           ' -- "${EXISTING[@]}" <<< "$ORIGINAL")
 
