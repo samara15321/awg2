@@ -68,17 +68,7 @@ jobs:
         id: filter
         run: |
           MATRIX='${{ needs.generate-matrix.outputs.matrix }}'
-          FILTERED=$(jq -c --argfile existing existing_assets.txt '
-            .include |= map(
-              . as $item
-              | "immortal-awg-2-${{ inputs.openwrt_version }}-\($item.target)-\($item.subtarget)-\($item.pkgarch).zip"
-              | IN($existing[]) | not
-              | select(.) | $item
-            )
-          ' <<< "$MATRIX")
-
-          echo "matrix=$FILTERED" >> $GITHUB_OUTPUT
-          echo "Осталось собрать: $(echo "$FILTERED" | jq '.include | length') целей"
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   # 3. Сама сборка
   build-awg:
