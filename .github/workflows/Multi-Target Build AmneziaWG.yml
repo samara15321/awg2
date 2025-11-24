@@ -75,26 +75,33 @@ jobs:
           # SNAPSHOT — собираем всё
           if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
             echo "matrix=$ORIGINAL" >> $GITHUB_OUTPUT
+            echo "SNAPSHOT → собираем все цели"
             exit 0
           fi
 
-          # Получаем список уже загруженных ZIP-ов
+          # Получаем список уже существующих ZIP-ов в релизе
           mapfile -t EXISTING < <(
             curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ inputs.openwrt_version }}" \
-              | jq -r '.assets[].name' 2>/dev/null || echo ""
+              | jq -r '.assets[].name' 2>/dev/null || true
           )
 
-          # Фильтруем: оставляем только те ZIP-ы, которых ЕЩЁ НЕТ в релизе
+          # Фильтруем матрицу: оставляем только те, которых ещё НЕТ
           FILTERED=$(jq -c --args '
             .include |= map(select(
               "immortal-awg-2-${{ inputs.openwrt_version }}-\(.target)-\(.subtarget)-\(.pkgarch).zip" as $zip
-              | ($args[] | contains($zip)) | not
+              | ($args[] | select(. == $zip)) | not
             ))
           ' -- "${EXISTING[@]}" <<< "$ORIGINAL")
 
+          # Если что-то пошло не так — лучше собрать всё, чем ничего
+          if [ -z "$FILTERED" ]; then
+            FILTERED="$ORIGINAL"
+          fi
+
           echo "matrix=$FILTERED" >> $GITHUB_OUTPUT
-          echo "Осталось собрать: $(jq '.include | length' <<< "$FILTERED") целей"
+          COUNT=$(jq '.include | length' <<< "$FILTERED")
+          echo "Осталось собрать: $COUNT целей"
 
   # 3. Сама сборка
   build-awg:
