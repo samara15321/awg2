@@ -7,15 +7,20 @@ if (!version) {
   process.exit(1);
 }
 
-const url = `https://downloads.immortalwrt.org/releases/${version}/targets/`;
+const baseUrl = `https://downloads.immortalwrt.org/releases/${version}/targets/`;
 
 async function fetchHTML(url) {
   const { data } = await axios.get(url);
   return cheerio.load(data);
 }
 
+async function fetchJSON(url) {
+  const { data } = await axios.get(url);
+  return data;
+}
+
 async function getTargets() {
-  const $ = await fetchHTML(url);
+  const $ = await fetchHTML(baseUrl);
   return $('table tr td.n a')
     .map((i, el) => $(el).attr('href'))
     .get()
@@ -24,7 +29,7 @@ async function getTargets() {
 }
 
 async function getSubtargets(target) {
-  const $ = await fetchHTML(`${url}${target}/`);
+  const $ = await fetchHTML(`${baseUrl}${target}/`);
   return $('table tr td.n a')
     .map((i, el) => $(el).attr('href'))
     .get()
@@ -33,28 +38,38 @@ async function getSubtargets(target) {
 }
 
 async function getPkgarch(target, subtarget) {
-  const packagesUrl = `${url}${target}/${subtarget}/packages/`;
-  const $ = await fetchHTML(packagesUrl);
-
-  let pkgarch = '';
-
-  // ищем первый не-kernel .ipk (обычно правильный arch)
-  $('a').each((i, el) => {
-    const name = $(el).attr('href');
-    if (name && name.endsWith('.ipk') && !name.startsWith('kernel_')) {
-      const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
-      if (match) {
-        pkgarch = match[1];
-        return false; // break
-      }
+  // Хардкод для malta
+  if (target === 'malta') {
+    if (subtarget === 'be' || subtarget === 'le') {
+      return 'mipsel_24kc';
     }
-  });
+    if (subtarget === 'be64' || subtarget === 'le64') {
+      return 'mips64el_octeonplus';
+    }
+  }
 
-  // fallback: если ничего не нашли, пробуем kernel_*
-  if (!pkgarch) {
+  const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
+  try {
+    const json = await fetchJSON(profilesUrl);
+    if (json && json.arch_packages) {
+      return json.arch_packages;
+    }
+  } catch (err) {
+    console.warn(`profiles.json not available for ${target}/${subtarget}, falling back to .ipk parsing`);
+    return await getPkgarchFallback(target, subtarget);
+  }
+
+  return 'unknown';
+}
+
+async function getPkgarchFallback(target, subtarget) {
+  const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
+  let pkgarch = 'unknown';
+  try {
+    const $ = await fetchHTML(packagesUrl);
     $('a').each((i, el) => {
       const name = $(el).attr('href');
-      if (name && name.startsWith('kernel_')) {
+      if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
         const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
         if (match) {
           pkgarch = match[1];
@@ -62,9 +77,22 @@ async function getPkgarch(target, subtarget) {
         }
       }
     });
+    if (pkgarch === 'unknown') {
+      $('a').each((i, el) => {
+        const name = $(el).attr('href');
+        if (name && name.endsWith('.ipk') && name.startsWith('kernel_')) {
+          const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
+          if (match) {
+            pkgarch = match[1];
+            return false;
+          }
+        }
+      });
+    }
+  } catch (err) {
+    // silent
   }
-
-  return pkgarch || 'unknown';
+  return pkgarch;
 }
 
 async function main() {
@@ -80,11 +108,10 @@ async function main() {
       }
     }
 
-    // вывод для GitHub Actions
+    // Одна строка — важно для GitHub Actions!
     console.log(JSON.stringify({ include: matrix }));
-
   } catch (err) {
-    console.error(err);
+    console.error('Error:', err.message || err);
     process.exit(1);
   }
 }
