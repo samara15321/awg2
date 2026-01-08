@@ -1,4 +1,4 @@
-name: X-Multi-Target Build AmneziaWG
+name: Push-Multi-Target Build AmneziaWG
 
 on:
   workflow_dispatch:
