@@ -32,4 +32,6 @@
 + Для врт **25.12.x**
 - `apk add bash`
 - `bash -c "$(wget -qO- https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-awg.sh)"`
++ Для варианта с **GO** 
+- `bash -c "$(wget -qO- https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-GO.sh)"`
 ***
