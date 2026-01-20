@@ -26,8 +26,7 @@
 + **Автоустановка** (если есть пакеты под вашу версию врт)
 - сам определит вашу архитектуру, версию врт.  **amneziaGO не устанавливается.**
 + Для wrt **23.05.x-24.10.x**
-- `opkg update`
-- `opkg install bash`
+- `opkg update && opkg install bash`
 - `bash -c "$(wget -qO- https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-awg.sh)"`
 + Для wrt **25.12.x**
 - `apk add bash`
