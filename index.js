@@ -7,34 +7,53 @@ if (!version) {
   process.exit(1);
 }
 
-const baseUrl = `https://downloads.immortalwrt.org/releases/${version}/targets/`;
+const BASE_URLS = [
+  `https://downloads.immortalwrt.org/releases/${version}/targets/`,
+  `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
+  `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
+];
 
 async function fetchHTML(url) {
-  const { data } = await axios.get(url);
+  const { data } = await axios.get(url, { timeout: 10000 });
   return cheerio.load(data);
 }
 
 async function fetchJSON(url) {
-  const { data } = await axios.get(url);
+  const { data } = await axios.get(url, { timeout: 10000 });
   return data;
 }
 
+async function tryAllBases(fn) {
+  for (const baseUrl of BASE_URLS) {
+    try {
+      return await fn(baseUrl);
+    } catch (err) {
+      // пробуем следующий
+    }
+  }
+  throw new Error('All mirrors failed');
+}
+
 async function getTargets() {
-  const $ = await fetchHTML(baseUrl);
-  return $('table tr td.n a')
-    .map((i, el) => $(el).attr('href'))
-    .get()
-    .filter(href => href && href.endsWith('/'))
-    .map(href => href.slice(0, -1));
+  return tryAllBases(async (baseUrl) => {
+    const $ = await fetchHTML(baseUrl);
+    return $('table tr td.n a')
+      .map((i, el) => $(el).attr('href'))
+      .get()
+      .filter(href => href && href.endsWith('/'))
+      .map(href => href.slice(0, -1));
+  });
 }
 
 async function getSubtargets(target) {
-  const $ = await fetchHTML(`${baseUrl}${target}/`);
-  return $('table tr td.n a')
-    .map((i, el) => $(el).attr('href'))
-    .get()
-    .filter(href => href && href.endsWith('/'))
-    .map(href => href.slice(0, -1));
+  return tryAllBases(async (baseUrl) => {
+    const $ = await fetchHTML(`${baseUrl}${target}/`);
+    return $('table tr td.n a')
+      .map((i, el) => $(el).attr('href'))
+      .get()
+      .filter(href => href && href.endsWith('/'))
+      .map(href => href.slice(0, -1));
+  });
 }
 
 async function getPkgarch(target, subtarget) {
@@ -48,25 +67,25 @@ async function getPkgarch(target, subtarget) {
     }
   }
 
-  const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
-    const json = await fetchJSON(profilesUrl);
-    if (json && json.arch_packages) {
-      return json.arch_packages;
-    }
-  } catch (err) {
-    console.warn(`profiles.json not available for ${target}/${subtarget}, falling back to .ipk parsing`);
+    return await tryAllBases(async (baseUrl) => {
+      const json = await fetchJSON(`${baseUrl}${target}/${subtarget}/profiles.json`);
+      if (json && json.arch_packages) {
+        return json.arch_packages;
+      }
+      throw new Error('No arch_packages');
+    });
+  } catch {
     return await getPkgarchFallback(target, subtarget);
   }
-
-  return 'unknown';
 }
 
 async function getPkgarchFallback(target, subtarget) {
-  const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
-  try {
-    const $ = await fetchHTML(packagesUrl);
+
+  await tryAllBases(async (baseUrl) => {
+    const $ = await fetchHTML(`${baseUrl}${target}/${subtarget}/packages/`);
+
     $('a').each((i, el) => {
       const name = $(el).attr('href');
       if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
@@ -77,10 +96,11 @@ async function getPkgarchFallback(target, subtarget) {
         }
       }
     });
+
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
-        if (name && name.endsWith('.ipk') && name.startsWith('kernel_')) {
+        if (name && name.startsWith('kernel_') && name.endsWith('.ipk')) {
           const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
           if (match) {
             pkgarch = match[1];
@@ -89,9 +109,14 @@ async function getPkgarchFallback(target, subtarget) {
         }
       });
     }
-  } catch (err) {
-    // silent
-  }
+
+    if (pkgarch !== 'unknown') {
+      return pkgarch;
+    }
+
+    throw new Error('Not found');
+  });
+
   return pkgarch;
 }
 
@@ -108,7 +133,6 @@ async function main() {
       }
     }
 
-    // Одна строка — важно для GitHub Actions!
     console.log(JSON.stringify({ include: matrix }));
   } catch (err) {
     console.error('Error:', err.message || err);
