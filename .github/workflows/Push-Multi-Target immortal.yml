@@ -79,12 +79,25 @@ jobs:
             SUBTARGET="${{ matrix.subtarget }}"
 
             if [ "$VERSION" = "SNAPSHOT" ]; then
-                BASE_URL="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
+                MIRRORS=(
+                  "https://mirror.nju.edu.cn/immortalwrt/snapshots/targets/$TARGET/$SUBTARGET"
+                  "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/$TARGET/$SUBTARGET"
+                  "https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
+                )
             else
-                BASE_URL="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+                MIRRORS=(
+                  "https://mirror.nju.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+                  "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+                  "https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+                )
             fi
 
-            sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1)
+            sdk_url=""
+            for BASE_URL in "${MIRRORS[@]}"; do
+                sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1)
+                [ -n "$sdk_url" ] && break
+            done
+
             curl -fsLO "$BASE_URL/$sdk_url"
             tar -xf "$(basename "$sdk_url")"
             rm -f "$(basename "$sdk_url")"
