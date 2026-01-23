@@ -7,11 +7,19 @@ if (!version) {
   process.exit(1);
 }
 
-const BASE_URLS = [
-  `https://downloads.immortalwrt.org/releases/${version}/targets/`,
-  `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
-  `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
-];
+const isSnapshot = version.endsWith('SNAPSHOT');
+
+const BASE_URLS = isSnapshot
+  ? [
+      'https://downloads.immortalwrt.org/snapshots/targets/',
+      'https://mirror.nju.edu.cn/immortalwrt/snapshots/targets/',
+      'https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/',
+    ]
+  : [
+      `https://downloads.immortalwrt.org/releases/${version}/targets/`,
+      `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
+      `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
+    ];
 
 async function fetchHTML(url) {
   const { data } = await axios.get(url, { timeout: 10000 });
