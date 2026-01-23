@@ -9,13 +9,20 @@ if (!version) {
 
 const isSnapshot = version.endsWith('SNAPSHOT');
 
+// Массив базовых URL для релизов и snapshot
 const BASE_URLS = isSnapshot
   ? [
+      // releases/<version>-SNAPSHOT
+      `https://downloads.immortalwrt.org/releases/${version}/targets/`,
+      `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
+      `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
+      // snapshots/targets
       'https://downloads.immortalwrt.org/snapshots/targets/',
       'https://mirror.nju.edu.cn/immortalwrt/snapshots/targets/',
       'https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/',
     ]
   : [
+      // обычные релизы
       `https://downloads.immortalwrt.org/releases/${version}/targets/`,
       `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
       `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
@@ -31,56 +38,58 @@ async function fetchJSON(url) {
   return data;
 }
 
+// Пробуем все базовые URL, пока не получится
 async function tryAllBases(fn) {
   for (const baseUrl of BASE_URLS) {
     try {
       return await fn(baseUrl);
     } catch (err) {
-      // пробуем следующий
+      // console.warn(`Mirror failed: ${baseUrl}`);
+      continue; // пробуем следующий
     }
   }
   throw new Error('All mirrors failed');
 }
 
+// Получаем список targets
 async function getTargets() {
   return tryAllBases(async (baseUrl) => {
     const $ = await fetchHTML(baseUrl);
-    return $('table tr td.n a')
+    const list = $('table tr td.n a')
       .map((i, el) => $(el).attr('href'))
       .get()
       .filter(href => href && href.endsWith('/'))
       .map(href => href.slice(0, -1));
+    if (!list.length) throw new Error('No targets found');
+    return list;
   });
 }
 
+// Получаем список subtargets
 async function getSubtargets(target) {
   return tryAllBases(async (baseUrl) => {
     const $ = await fetchHTML(`${baseUrl}${target}/`);
-    return $('table tr td.n a')
+    const list = $('table tr td.n a')
       .map((i, el) => $(el).attr('href'))
       .get()
       .filter(href => href && href.endsWith('/'))
       .map(href => href.slice(0, -1));
+    if (!list.length) throw new Error('No subtargets found');
+    return list;
   });
 }
 
+// Получаем pkgarch
 async function getPkgarch(target, subtarget) {
-  // Хардкод для malta
   if (target === 'malta') {
-    if (subtarget === 'be' || subtarget === 'le') {
-      return 'mipsel_24kc';
-    }
-    if (subtarget === 'be64' || subtarget === 'le64') {
-      return 'mips64el_octeonplus';
-    }
+    if (subtarget === 'be' || subtarget === 'le') return 'mipsel_24kc';
+    if (subtarget === 'be64' || subtarget === 'le64') return 'mips64el_octeonplus';
   }
 
   try {
     return await tryAllBases(async (baseUrl) => {
       const json = await fetchJSON(`${baseUrl}${target}/${subtarget}/profiles.json`);
-      if (json && json.arch_packages) {
-        return json.arch_packages;
-      }
+      if (json && json.arch_packages) return json.arch_packages;
       throw new Error('No arch_packages');
     });
   } catch {
@@ -88,6 +97,7 @@ async function getPkgarch(target, subtarget) {
   }
 }
 
+// Фоллбек через парсинг packages/
 async function getPkgarchFallback(target, subtarget) {
   let pkgarch = 'unknown';
 
@@ -118,16 +128,14 @@ async function getPkgarchFallback(target, subtarget) {
       });
     }
 
-    if (pkgarch !== 'unknown') {
-      return pkgarch;
-    }
-
-    throw new Error('Not found');
+    if (pkgarch === 'unknown') throw new Error('pkgarch not found');
+    return pkgarch;
   });
 
   return pkgarch;
 }
 
+// Основная функция
 async function main() {
   try {
     const targets = await getTargets();
