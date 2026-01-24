@@ -13,16 +13,19 @@ const isSnapshot = version.endsWith('SNAPSHOT');
 const BASE_URLS = isSnapshot
   ? [
       // releases/<version>-SNAPSHOT
+      `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`,
       `https://downloads.immortalwrt.org/releases/${version}/targets/`,
       `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
       `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
       // snapshots/targets
+       https://immortalwrt.kyarucloud.moe/snapshots/targets/',
       'https://downloads.immortalwrt.org/snapshots/targets/',
       'https://mirror.nju.edu.cn/immortalwrt/snapshots/targets/',
       'https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/',
     ]
   : [
       // обычные релизы
+      `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`,
       `https://downloads.immortalwrt.org/releases/${version}/targets/`,
       `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
       `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
