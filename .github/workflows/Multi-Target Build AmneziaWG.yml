@@ -132,15 +132,11 @@ jobs:
           if [ "$VERSION" = "SNAPSHOT" ]; then
               MIRRORS=(
                 "https://immortalwrt.kyarucloud.moe/snapshots/targets/$TARGET/$SUBTARGET"
-                "https://mirror.nju.edu.cn/immortalwrt/snapshots/targets/$TARGET/$SUBTARGET"
-                "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/$TARGET/$SUBTARGET"
                 "https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
               )
           else
               MIRRORS=(
                 "https://immortalwrt.kyarucloud.moe/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-                "https://mirror.nju.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-                "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
                 "https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
               )
           fi
