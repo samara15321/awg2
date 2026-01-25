@@ -76,9 +76,9 @@ jobs:
 
         # Определяем базовый URL
         if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
-            base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            base_url="https://immortalwrt.kyarucloud.moe/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
         else
-            base_url="https://downloads.immortalwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            base_url="https://immortalwrt.kyarucloud.moe/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
         fi
 
         # Ищем SDK
