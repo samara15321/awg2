@@ -17,7 +17,7 @@ const BASE_URLS = isSnapshot
       `https://downloads.immortalwrt.org/releases/${version}/targets/`,
       `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
       // snapshots/targets
-       https://immortalwrt.kyarucloud.moe/snapshots/targets/',
+      'https://immortalwrt.kyarucloud.moe/snapshots/targets/',
       'https://downloads.immortalwrt.org/snapshots/targets/',
       'https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/',
     ]
