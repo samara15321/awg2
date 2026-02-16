@@ -180,7 +180,7 @@ jobs:
           set +e
 
           if [ "$compile_go" = "true" ]; then
-            make package/amneziawg-go/{clean,download,prepare,compile} -j$(nproc) \
+            make package/amneziawg-go/compile V=s -j$(nproc) \
               || echo "amneziawg-go failed — continuing anyway"
           fi
 
