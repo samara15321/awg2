@@ -195,11 +195,6 @@ jobs:
           cd openwrt
           set +e
 
-          if [ "$compile_go" = "true" ]; then
-            make package/amneziawg-go/compile -j$(nproc) \
-              || echo "amneziawg-go failed — continuing anyway"
-          fi
-
           make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc)
           KMOD_STATUS=$?
 
@@ -208,6 +203,11 @@ jobs:
 
           make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc)
           LUCI_STATUS=$?
+
+          if [ "$compile_go" = "true" ]; then
+            make package/amneziawg-go/compile -j$(nproc) \
+              || echo "amneziawg-go failed — continuing anyway"
+          fi
 
           if [ $KMOD_STATUS -ne 0 ] || [ $LUCI_STATUS -ne 0 ] || [ $TOOLS_STATUS -ne 0 ]; then
             echo "One or more REQUIRED packages failed"
