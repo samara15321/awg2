@@ -31,10 +31,6 @@ define Package/amneziawg-go
   DEPENDS:=$(GO_ARCH_DEPENDS) +kmod-tun
 endef
 
-define Build/Compile
-  $(call GoPackage/Build/Compile)
-endef
-
 define Package/amneziawg-go/description
   AmneziaWG is a contemporary version of the WireGuard protocol. It's a fork of
   WireGuard-Go and offers protection against detection by Deep Packet Inspection
