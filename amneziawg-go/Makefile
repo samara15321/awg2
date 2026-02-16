@@ -22,13 +22,17 @@ GO_PKG_LDFLAGS_X:=\
 	main.Build=$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
-include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
+include ../../packages/lang/golang/golang-package.mk
 
 define Package/amneziawg-go
   SECTION:=net
   CATEGORY:=Network
   TITLE:=AmneziaWG userspace implementation program (written in Go)
   DEPENDS:=$(GO_ARCH_DEPENDS) +kmod-tun
+endef
+
+define Build/Compile
+  $(call GoPackage/Build/Compile)
 endef
 
 define Package/amneziawg-go/description
