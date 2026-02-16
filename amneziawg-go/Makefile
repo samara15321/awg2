@@ -22,7 +22,7 @@ GO_PKG_LDFLAGS_X:=\
 	main.Build=$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
-include ../../packages/lang/golang/golang-package.mk
+include $(INCLUDE_DIR)/golang-package.mk
 
 define Package/amneziawg-go
   SECTION:=net
