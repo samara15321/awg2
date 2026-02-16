@@ -15,7 +15,7 @@ PKG_MIRROR_HASH:=a8663e9feb193b9b65e38b469d5a422ca09a3ac3de1b35a3f4a4e3a006e9123
 
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
-PKG_BUILD_FLAGS:=no-mips16
+PKG_BUILD_FLAGS:=no-mips16 no-clean
 
 GO_PKG:=github.com/amnezia-vpn/amneziawg-go
 GO_PKG_LDFLAGS_X:=\
