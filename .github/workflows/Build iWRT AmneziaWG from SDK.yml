@@ -74,32 +74,27 @@ jobs:
       run: |
         set -e -x
 
-        # Определяем базовый URL
-        if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
-            base_url=""https://immortalwrt.kyarucloud.moe/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
-        else
-            base_url=""https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
-        fi
+        TARGET="${{ inputs.openwrt_target }}"
+        SUBTARGET="${{ inputs.openwrt_subtarget }}"
+        VERSION="${{ inputs.openwrt_version }}"
+
+        # Базовый URL (только releases, только SJTUG mirror)
+        base_url="https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
 
         # Ищем SDK
-        sdk_url=$(curl -s "${base_url}/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' \
-                  | sed -e 's/href="//' -e 's/"$//' | head -n1)
-
-        # Если не нашли в релизе — пробуем SNAPSHOT
-        if [[ -z "$sdk_url" && "${{ inputs.openwrt_version }}" != "SNAPSHOT" ]]; then
-            echo "SDK not found for release, trying SNAPSHOT..."
-            base_url="https://downloads.immortalwrt.org/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
-            sdk_url=$(curl -s "${base_url}/" | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' \
-                      | sed -e 's/href="//' -e 's/"$//' | head -n1)
-        fi
+        sdk_url=$(curl -fsSL "${base_url}/" \
+          | grep -oP 'href="[^"]*immortalwrt-sdk[^"]+\.tar\.zst"' \
+          | sed -e 's/href="//' -e 's/"$//' \
+          | head -n1 || true)
 
         if [[ -z "$sdk_url" ]]; then
-            echo "SDK not found for ${{ inputs.openwrt_version }}/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            echo "SDK not found for $VERSION/$TARGET/$SUBTARGET"
             exit 1
         fi
 
         # Качаем и распаковываем SDK
-        curl -fsLO "${base_url}/${sdk_url}"
+        curl -fL --retry 5 --retry-all-errors --continue-at - -O "${base_url}/${sdk_url}"
+
         file_name=$(basename "$sdk_url")
         tar -xf "$file_name"
         rm -f "$file_name"
