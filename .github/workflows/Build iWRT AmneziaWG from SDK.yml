@@ -76,9 +76,9 @@ jobs:
 
         # Определяем базовый URL
         if [ "${{ inputs.openwrt_version }}" = "SNAPSHOT" ]; then
-            base_url="https://immortalwrt.kyarucloud.moe/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            base_url=""https://immortalwrt.kyarucloud.moe/snapshots/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
         else
-            base_url="https://immortalwrt.kyarucloud.moe/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
+            base_url=""https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${{ inputs.openwrt_version }}/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}"
         fi
 
         # Ищем SDK
@@ -113,6 +113,7 @@ jobs:
 
         # Загружаем базовый .config и включаем нужные пакеты
         curl -fsL "$base_url/config.buildinfo" > openwrt/.config
+        echo "CONFIG_PACKAGE_kmod-crypto-kpp=y"                   >> openwrt/.config
         echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y"          >> openwrt/.config
         echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y"  >> openwrt/.config
         echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y"      >> openwrt/.config
