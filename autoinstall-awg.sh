@@ -62,23 +62,31 @@ wget -qO awg.zip "$ZIP_URL" || {
     exit 1
 }
 
-# --- unzip ---
+# --- проверка и установка unzip ---
 if ! command -v unzip >/dev/null 2>&1; then
-    echo "[*] unzip не найден, устанавливаем..."
+    echo "[*] unzip не найден, пытаемся установить..."
+    
     if command -v apk >/dev/null 2>&1; then
-        apk update               # <- обязательно!
-        apk add unzip
+        echo "[*] Используем apk..."
+        apk update
+        apk add unzip || true
+    elif command -v opkg >/dev/null 2>&1; then
+        echo "[*] Используем opkg..."
+        opkg update
+        opkg install unzip || true
     else
-        echo "❌ Не найден apk, установи unzip вручную"
+        echo "❌ Не найден пакетный менеджер (apk или opkg), установи unzip вручную"
         exit 1
     fi
 fi
 
-# Проверяем снова
-unzip -o awg.zip >/dev/null || {
-    echo "❌ unzip всё ещё не доступен"
+# Проверка после установки
+if ! command -v unzip >/dev/null 2>&1; then
+    echo "❌ unzip всё ещё не найден. Установи вручную: opkg install unzip или apk add unzip"
     exit 1
-}
+fi
+
+echo "[+] unzip установлен и готов к использованию"
 
 cd awgrelease 2>/dev/null || {
     echo "❌ awgrelease directory missing"
