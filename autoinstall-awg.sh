@@ -4,6 +4,7 @@ set -e
 REPO="samara15321/awg2"
 API="https://api.github.com/repos/$REPO/releases?per_page=100"
 TMP="/tmp/awg"
+
 mkdir -p "$TMP"
 cd "$TMP" || exit 1
 
@@ -22,24 +23,27 @@ if ! wget -qO releases.json "$API"; then
   exit 1
 fi
 
-# --- strict ZIP lookup ---
+# --- ZIP lookup (гибкий поиск) ---
 ZIP_URL=""
 while IFS= read -r line; do
   case "$line" in
-    *"https://github.com/$REPO/releases/download/$REL/"*"${TARGET_DASH}"*".zip"*)
+    *https://github.com/"$REPO"/releases/download/"$REL"/*"$TARGET_DASH"*".zip"*)
       ZIP_URL="$line"
       break
       ;;
   esac
 done < releases.json
 
-# убираем лишние кавычки, если они попали
-ZIP_URL=$(echo "$ZIP_URL" | tr -d '"' | tr -d ' ')
+# Очистка: убираем кавычки, пробелы, запятые и т.п.
+ZIP_URL=$(echo "$ZIP_URL" | tr -d '" ,[]' | sed 's/ *$//')
 
 if [ -z "$ZIP_URL" ]; then
   echo "❌ No matching build for $REL / $TARGET"
   echo "Проверь релиз вручную:"
   echo "https://github.com/$REPO/releases/tag/$REL"
+  echo ""
+  echo "Для отладки — ищи в releases.json строки с rockchip-armv8:"
+  echo "grep -i rockchip releases.json"
   exit 1
 fi
 
