@@ -1,6 +1,7 @@
 #!/bin/sh
 # AWG auto installer (BusyBox / ash compatible)
 # Работает с SNAPSHOT, строго берёт текущий tag
+# unzip должен быть установлен вручную
 
 set -e
 
@@ -32,7 +33,6 @@ wget -qO releases.json "$API" || {
 
 # --- find ZIP strictly by current release tag + target ---
 echo "[*] Searching matching build..."
-
 ZIP_URL="$(cat releases.json \
  | tr ',' '\n' \
  | grep browser_download_url \
@@ -62,31 +62,12 @@ wget -qO awg.zip "$ZIP_URL" || {
     exit 1
 }
 
-# --- проверка и установка unzip ---
-if ! command -v unzip >/dev/null 2>&1; then
-    echo "[*] unzip не найден, пытаемся установить..."
-    
-    if command -v apk >/dev/null 2>&1; then
-        echo "[*] Используем apk..."
-        apk update
-        apk add unzip || true
-    elif command -v opkg >/dev/null 2>&1; then
-        echo "[*] Используем opkg..."
-        opkg update
-        opkg install unzip || true
-    else
-        echo "❌ Не найден пакетный менеджер (apk или opkg), установи unzip вручную"
-        exit 1
-    fi
-fi
-
-# Проверка после установки
-if ! command -v unzip >/dev/null 2>&1; then
-    echo "❌ unzip всё ещё не найден. Установи вручную: opkg install unzip или apk add unzip"
+# --- распаковка ---
+# unzip должен быть установлен вручную
+unzip -o awg.zip >/dev/null || {
+    echo "❌ unzip не найден или ошибка распаковки. Установи unzip вручную"
     exit 1
-fi
-
-echo "[+] unzip установлен и готов к использованию"
+}
 
 cd awgrelease 2>/dev/null || {
     echo "❌ awgrelease directory missing"
