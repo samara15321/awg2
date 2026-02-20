@@ -66,7 +66,7 @@ wget -qO awg.zip "$ZIP_URL" || {
 if ! command -v unzip >/dev/null 2>&1; then
     echo "[*] unzip не найден, устанавливаем..."
     if command -v apk >/dev/null 2>&1; then
-        apk update
+        apk update               # <- обязательно!
         apk add unzip
     else
         echo "❌ Не найден apk, установи unzip вручную"
