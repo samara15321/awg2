@@ -25,7 +25,6 @@ wget -qO releases.json "$API" || {
 # Поиск ZIP — максимально гибкий
 ZIP_URL=""
 while IFS= read -r line; do
-  # Ищем строку с нужным релизом + target в имени + .zip
   case "$line" in
     *"https://github.com/$REPO/releases/download/$REL/"*"$TARGET_DASH"*".zip"*)
       ZIP_URL="$line"
@@ -34,7 +33,7 @@ while IFS= read -r line; do
   esac
 done < releases.json
 
-# Очистка URL от JSON-мусора (кавычки, запятые и т.д.)
+# Очистка: берём только чистый URL из JSON (убираем ", кавычки, etc.)
 ZIP_URL=$(echo "$ZIP_URL" | sed -E 's/.*"(https:\/\/[^"]+\.zip)".*/\1/')
 
 if [ -z "$ZIP_URL" ]; then
