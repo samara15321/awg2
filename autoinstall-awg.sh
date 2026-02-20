@@ -1,4 +1,6 @@
 #!/bin/sh
+# AWG auto installer (POSIX / BusyBox ash compatible)
+
 set -e
 
 REPO="samara15321/awg2"
@@ -8,98 +10,126 @@ TMP="/tmp/awg"
 mkdir -p "$TMP"
 cd "$TMP" || exit 1
 
-# OpenWrt info
+echo "[*] Detecting OpenWrt..."
+
+# --- OpenWrt info ---
 . /etc/openwrt_release
+
 REL="$DISTRIB_RELEASE"
 TARGET="$DISTRIB_TARGET"
 TARGET_DASH="$(echo "$TARGET" | tr '/' '-')"
-echo "[*] OpenWrt release: $REL"
-echo "[*] Target: $TARGET"
 
-echo "[*] Fetching releases info..."
+echo "[*] Release: $REL"
+echo "[*] Target : $TARGET"
+
+# --- fetch releases ---
+echo "[*] Fetching releases list..."
 wget -qO releases.json "$API" || {
-  echo "❌ Не удалось скачать информацию о релизах"
-  exit 1
+    echo "❌ Cannot fetch releases"
+    exit 1
 }
 
-# Поиск ZIP — максимально гибкий
-ZIP_URL=""
-while IFS= read -r line; do
-  case "$line" in
-    *"https://github.com/$REPO/releases/download/$REL/"*"$TARGET_DASH"*".zip"*)
-      ZIP_URL="$line"
-      break
-      ;;
-  esac
-done < releases.json
+# --- SNAPSHOT fix ---
+case "$REL" in
+  *SNAPSHOT*)
+    echo "[*] SNAPSHOT detected → using latest release tag"
+    REL="$(grep -m1 '"tag_name"' releases.json \
+        | sed 's/.*"tag_name":[ ]*"\([^"]*\)".*/\1/')"
+    echo "[*] Using tag: $REL"
+  ;;
+esac
 
-# Очистка: берём только чистый URL из JSON (убираем ", кавычки, etc.)
-ZIP_URL=$(echo "$ZIP_URL" | sed -E 's/.*"(https:\/\/[^"]+\.zip)".*/\1/')
+# --- find ZIP ---
+echo "[*] Searching matching build..."
+
+ZIP_URL="$(grep "$TARGET_DASH" releases.json \
+    | grep '\.zip' \
+    | grep "download/$REL" \
+    | head -n1 \
+    | sed -n 's/.*"\(https:[^"]*\.zip\)".*/\1/p')"
 
 if [ -z "$ZIP_URL" ]; then
-  echo "❌ No matching build for $REL / $TARGET"
-  echo "Проверь релиз вручную: https://github.com/$REPO/releases/tag/$REL"
-  echo "Для отладки выполни:"
-  echo "grep -i '$TARGET_DASH' releases.json | grep zip"
-  exit 1
+    echo "❌ Build not found for:"
+    echo "   tag=$REL"
+    echo "   target=$TARGET_DASH"
+    exit 1
 fi
 
-echo "[+] Found zip: $ZIP_URL"
+echo "[+] Found:"
+echo "    $ZIP_URL"
 
-wget -O awg.zip "$ZIP_URL" || {
-  echo "❌ Не удалось скачать ZIP"
-  exit 1
+# --- download ---
+echo "[*] Downloading..."
+wget -qO awg.zip "$ZIP_URL" || {
+    echo "❌ Download failed"
+    exit 1
 }
 
-# unzip
-if command -v unzip >/dev/null; then
-  unzip -o awg.zip
-elif busybox unzip >/dev/null; then
-  busybox unzip -o awg.zip
-else
-  echo "❌ unzip not available. Установи: opkg update && opkg install unzip"
-  exit 1
+# --- unzip ---
+if ! command -v unzip >/dev/null 2>&1; then
+    echo "[*] Installing unzip..."
+    opkg update >/dev/null 2>&1
+    opkg install unzip >/dev/null 2>&1
 fi
 
-cd awgrelease || {
-  echo "❌ awgrelease directory missing"
-  exit 1
+unzip -o awg.zip >/dev/null
+
+cd awgrelease 2>/dev/null || {
+    echo "❌ awgrelease directory missing"
+    exit 1
 }
 
-# PM detect
-if command -v apk >/dev/null; then PM=apk
-elif command -v opkg >/dev/null; then PM=opkg
+# --- detect package manager ---
+if command -v opkg >/dev/null 2>&1; then
+    PM="opkg"
+elif command -v apk >/dev/null 2>&1; then
+    PM="apk"
 else
-  echo "❌ No package manager (apk/opkg)"
-  exit 1
+    echo "❌ No package manager"
+    exit 1
 fi
 
-echo "[*] Installing via $PM"
+echo "[*] Installing packages via $PM"
 
-INST_KMOD=0 INST_TOOLS=0 INST_LUCI=0
+INST_KMOD=0
+INST_TOOLS=0
+INST_LUCI=0
 
-for pkg in kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru; do
-  FILE=$(ls "${pkg}"-*."${PM}" 2>/dev/null | head -n1)
-  [ -z "$FILE" ] && { echo "⚠ $pkg not found"; continue; }
+for pkg in \
+    kmod-amneziawg \
+    amneziawg-tools \
+    luci-proto-amneziawg \
+    luci-i18n-amneziawg-ru
+do
+    FILE="$(ls | grep "^$pkg-.*\.$PM$" | head -n1)"
 
-  echo "[+] Installing $FILE"
-  if [ "$PM" = apk ]; then
-    apk add --allow-untrusted "./$FILE" || true
-  else
-    opkg install "./$FILE" || true
-  fi
+    [ -z "$FILE" ] && {
+        echo "⚠ $pkg not found"
+        continue
+    }
 
-  case $pkg in
-    kmod-amneziawg)     INST_KMOD=1 ;;
-    amneziawg-tools)    INST_TOOLS=1 ;;
-    luci-proto-amneziawg) INST_LUCI=1 ;;
-  esac
+    echo "[+] Installing $FILE"
+
+    if [ "$PM" = "opkg" ]; then
+        opkg install "./$FILE" >/dev/null 2>&1 || true
+    else
+        apk add --allow-untrusted "./$FILE" >/dev/null 2>&1 || true
+    fi
+
+    case "$pkg" in
+        kmod-amneziawg) INST_KMOD=1 ;;
+        amneziawg-tools) INST_TOOLS=1 ;;
+        luci-proto-amneziawg) INST_LUCI=1 ;;
+    esac
 done
 
-echo "✅ AWG install finished"
+echo
+echo "✅ AWG installation finished"
 
-[ "$INST_KMOD" = 1 ] && [ "$INST_TOOLS" = 1 ] && [ "$INST_LUCI" = 1 ] && {
-  echo ""
-  echo "⚠ Для применения изменений требуется перезагрузка роутера"
-  echo "⚠ Reboot required to apply changes"
-}
+if [ "$INST_KMOD" -eq 1 ] &&
+   [ "$INST_TOOLS" -eq 1 ] &&
+   [ "$INST_LUCI" -eq 1 ]; then
+    echo
+    echo "⚠ Reboot required:"
+    echo "reboot"
+fi
