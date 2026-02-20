@@ -24,14 +24,14 @@
 + для оф. [Openwrt](https://github.com/samara1531/awg2/releases)
 -----------------------
 
-### Автоустановка AWG (если есть пакеты под вашу версию WRT)
+### Автоустановка AWG (если есть пакеты под вашу версию immortalWRT)
 
-**Для OpenWrt 23.05.x – 24.10.x**
+**Для immortalWRT 23.05.x – 24.10.x**
 ```sh
 opkg update && opkg install unzip
 wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-awg.sh?$(date +%s)" | sh
 ```
-**Для OpenWrt 25.12.x**
+**Для immortalWRT 25.12.x**
 ```sh
 apk add unzip
 wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-awg.sh?$(date +%s)" | sh
