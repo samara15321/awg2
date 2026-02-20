@@ -62,7 +62,7 @@ wget -qO awg.zip "$ZIP_URL" || {
     exit 1
 }
 
-# --- распаковка ZIP ---
+# --- распаковка ---
 unzip -o awg.zip >/dev/null || {
     echo "❌ unzip не найден или ошибка распаковки. Установи unzip вручную"
     exit 1
