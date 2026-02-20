@@ -8,7 +8,7 @@ TMP="/tmp/awg"
 mkdir -p "$TMP"
 cd "$TMP" || exit 1
 
-# --- OpenWrt info ---
+# OpenWrt info
 . /etc/openwrt_release
 REL="$DISTRIB_RELEASE"
 TARGET="$DISTRIB_TARGET"
@@ -16,47 +16,43 @@ TARGET_DASH="$(echo "$TARGET" | tr '/' '-')"
 echo "[*] OpenWrt release: $REL"
 echo "[*] Target: $TARGET"
 
-# --- fetch releases ---
 echo "[*] Fetching releases info..."
 if ! wget -qO releases.json "$API"; then
   echo "❌ Не удалось скачать информацию о релизах"
   exit 1
 fi
 
-# --- ZIP lookup (гибкий поиск) ---
+# Гибкий поиск ZIP — без ${} внутри case
 ZIP_URL=""
 while IFS= read -r line; do
   case "$line" in
-    *https://github.com/"$REPO"/releases/download/"$REL"/*"$TARGET_DASH"*".zip"*)
+    *"https://github.com/$REPO/releases/download/$REL/"*"$TARGET_DASH"*".zip"*)
       ZIP_URL="$line"
       break
       ;;
   esac
 done < releases.json
 
-# Очистка: убираем кавычки, пробелы, запятые и т.п.
-ZIP_URL=$(echo "$ZIP_URL" | tr -d '" ,[]' | sed 's/ *$//')
+# Очистка строки (убираем ", кавычки, пробелы в начале/конце)
+ZIP_URL=$(echo "$ZIP_URL" | sed 's/.*"\(https:.*\.zip\)".*/\1/' | tr -d ' ')
 
 if [ -z "$ZIP_URL" ]; then
   echo "❌ No matching build for $REL / $TARGET"
-  echo "Проверь релиз вручную:"
-  echo "https://github.com/$REPO/releases/tag/$REL"
-  echo ""
-  echo "Для отладки — ищи в releases.json строки с rockchip-armv8:"
-  echo "grep -i rockchip releases.json"
+  echo "Проверь релиз вручную: https://github.com/$REPO/releases/tag/$REL"
+  echo "Для отладки — покажи:"
+  echo "grep -i '$TARGET_DASH' releases.json"
   exit 1
 fi
 
-echo "[+] Found zip:"
-echo " $ZIP_URL"
+echo "[+] Found zip: $ZIP_URL"
 
-# --- download ---
+# Скачивание
 if ! wget -O awg.zip "$ZIP_URL"; then
   echo "❌ Не удалось скачать ZIP"
   exit 1
 fi
 
-# --- unzip ---
+# Распаковка
 if command -v unzip >/dev/null 2>&1; then
   unzip -o awg.zip
 elif busybox unzip >/dev/null 2>&1; then
@@ -72,7 +68,7 @@ cd awgrelease || {
   exit 1
 }
 
-# --- detect package manager ---
+# Package manager
 if command -v apk >/dev/null 2>&1; then
   PM=apk
 elif command -v opkg >/dev/null 2>&1; then
@@ -84,23 +80,14 @@ fi
 
 echo "[*] Installing packages via $PM"
 
-# --- install packages ---
 INST_KMOD=0
 INST_TOOLS=0
 INST_LUCI=0
 
-for pkg in \
-  kmod-amneziawg \
-  amneziawg-tools \
-  luci-proto-amneziawg \
-  luci-i18n-amneziawg-ru
-do
+for pkg in kmod-amneziawg amneziawg-tools luci-proto-amneziawg luci-i18n-amneziawg-ru; do
   FILE=""
-  for f in "${pkg}"-*."${PM}"; do
-    if [ -f "$f" ]; then
-      FILE="$f"
-      break
-    fi
+  for f in "$pkg"-*."$PM"; do
+    [ -f "$f" ] && FILE="$f" && break
   done
 
   if [ -z "$FILE" ]; then
@@ -125,7 +112,7 @@ done
 echo "✅ AWG install finished"
 
 if [ "$INST_KMOD" -eq 1 ] && [ "$INST_TOOLS" -eq 1 ] && [ "$INST_LUCI" -eq 1 ]; then
-  echo
+  echo ""
   echo "⚠ Для применения изменений требуется перезагрузка роутера"
   echo "⚠ Reboot required to apply changes"
 fi
