@@ -62,13 +62,6 @@ wget -qO awg.zip "$ZIP_URL" || {
     exit 1
 }
 
-# --- распаковка ---
-# unzip должен быть установлен вручную
-unzip -o awg.zip >/dev/null || {
-    echo "❌ unzip не найден или ошибка распаковки. Установи unzip вручную"
-    exit 1
-}
-
 cd awgrelease 2>/dev/null || {
     echo "❌ awgrelease directory missing"
     exit 1
