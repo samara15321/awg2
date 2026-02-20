@@ -64,12 +64,21 @@ wget -qO awg.zip "$ZIP_URL" || {
 
 # --- unzip ---
 if ! command -v unzip >/dev/null 2>&1; then
-    echo "[*] Installing unzip..."
-    opkg update >/dev/null 2>&1 || true
-    opkg install unzip >/dev/null 2>&1 || true
+    echo "[*] unzip не найден, устанавливаем..."
+    if command -v apk >/dev/null 2>&1; then
+        apk update               # <- обязательно!
+        apk add unzip
+    else
+        echo "❌ Не найден apk, установи unzip вручную"
+        exit 1
+    fi
 fi
 
-unzip -o awg.zip >/dev/null
+# Проверяем снова
+unzip -o awg.zip >/dev/null || {
+    echo "❌ unzip всё ещё не доступен"
+    exit 1
+}
 
 cd awgrelease 2>/dev/null || {
     echo "❌ awgrelease directory missing"
@@ -128,5 +137,5 @@ if [ "$INST_KMOD" -eq 1 ] &&
    [ "$INST_LUCI" -eq 1 ]; then
     echo
     echo "⚠ Reboot required to apply changes"
-    echo "reboot"
+    echo "⚠ Для применения изменений требуется перезагрузка роутера"
 fi
