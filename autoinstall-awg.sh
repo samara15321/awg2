@@ -1,5 +1,5 @@
 #!/bin/sh
-# AWG auto installer (POSIX / BusyBox ash compatible)
+# AWG auto installer (BusyBox / ash compatible)
 
 set -e
 
@@ -12,64 +12,60 @@ cd "$TMP" || exit 1
 
 echo "[*] Detecting OpenWrt..."
 
-# --- OpenWrt info ---
+# --- system info ---
 . /etc/openwrt_release
 
 REL="$DISTRIB_RELEASE"
 TARGET="$DISTRIB_TARGET"
 TARGET_DASH="$(echo "$TARGET" | tr '/' '-')"
 
-echo "[*] Release: $REL"
-echo "[*] Target : $TARGET"
+echo "[*] OpenWrt release: $REL"
+echo "[*] Target: $TARGET"
 
 # --- fetch releases ---
-echo "[*] Fetching releases list..."
+echo "[*] Fetching releases info..."
 wget -qO releases.json "$API" || {
-    echo "❌ Cannot fetch releases"
+    echo "❌ Failed to fetch releases"
     exit 1
 }
 
-# --- SNAPSHOT fix ---
-case "$REL" in
-  *SNAPSHOT*)
-    echo "[*] SNAPSHOT detected → using latest release tag"
-    REL="$(grep -m1 '"tag_name"' releases.json \
-        | sed 's/.*"tag_name":[ ]*"\([^"]*\)".*/\1/')"
-    echo "[*] Using tag: $REL"
-  ;;
-esac
-
-# --- find ZIP ---
+# --- find ZIP строго по TAG + TARGET ---
 echo "[*] Searching matching build..."
 
-ZIP_URL="$(grep "$TARGET_DASH" releases.json \
-    | grep '\.zip' \
-    | grep "download/$REL" \
-    | head -n1 \
-    | sed -n 's/.*"\(https:[^"]*\.zip\)".*/\1/p')"
+ZIP_URL="$(cat releases.json \
+ | tr ',' '\n' \
+ | grep browser_download_url \
+ | grep "/download/$REL/" \
+ | grep "$TARGET_DASH" \
+ | grep '.zip' \
+ | head -n1 \
+ | cut -d'"' -f4)"
 
 if [ -z "$ZIP_URL" ]; then
-    echo "❌ Build not found for:"
-    echo "   tag=$REL"
-    echo "   target=$TARGET_DASH"
+    echo "❌ No matching build for:"
+    echo "   release: $REL"
+    echo "   target : $TARGET_DASH"
+    echo
+    echo "Debug:"
+    echo "grep $TARGET_DASH releases.json"
     exit 1
 fi
 
-echo "[+] Found:"
+echo "[+] Found zip:"
 echo "    $ZIP_URL"
 
 # --- download ---
 echo "[*] Downloading..."
 wget -qO awg.zip "$ZIP_URL" || {
-    echo "❌ Download failed"
+    echo "❌ ZIP download failed"
     exit 1
 }
 
 # --- unzip ---
 if ! command -v unzip >/dev/null 2>&1; then
     echo "[*] Installing unzip..."
-    opkg update >/dev/null 2>&1
-    opkg install unzip >/dev/null 2>&1
+    opkg update >/dev/null 2>&1 || true
+    opkg install unzip >/dev/null 2>&1 || true
 fi
 
 unzip -o awg.zip >/dev/null
@@ -85,7 +81,7 @@ if command -v opkg >/dev/null 2>&1; then
 elif command -v apk >/dev/null 2>&1; then
     PM="apk"
 else
-    echo "❌ No package manager"
+    echo "❌ No package manager found"
     exit 1
 fi
 
@@ -103,17 +99,17 @@ for pkg in \
 do
     FILE="$(ls | grep "^$pkg-.*\.$PM$" | head -n1)"
 
-    [ -z "$FILE" ] && {
+    if [ -z "$FILE" ]; then
         echo "⚠ $pkg not found"
         continue
-    }
+    fi
 
     echo "[+] Installing $FILE"
 
     if [ "$PM" = "opkg" ]; then
-        opkg install "./$FILE" >/dev/null 2>&1 || true
+        opkg install "./$FILE" || true
     else
-        apk add --allow-untrusted "./$FILE" >/dev/null 2>&1 || true
+        apk add --allow-untrusted "./$FILE" || true
     fi
 
     case "$pkg" in
@@ -124,7 +120,7 @@ do
 done
 
 echo
-echo "✅ AWG installation finished"
+echo "✅ AWG install finished"
 
 if [ "$INST_KMOD" -eq 1 ] &&
    [ "$INST_TOOLS" -eq 1 ] &&
