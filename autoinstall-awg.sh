@@ -1,5 +1,6 @@
 #!/bin/sh
 # AWG auto installer (BusyBox / ash compatible)
+# Работает с SNAPSHOT, строго берёт текущий tag
 
 set -e
 
@@ -29,7 +30,7 @@ wget -qO releases.json "$API" || {
     exit 1
 }
 
-# --- find ZIP строго по TAG + TARGET ---
+# --- find ZIP strictly by current release tag + target ---
 echo "[*] Searching matching build..."
 
 ZIP_URL="$(cat releases.json \
@@ -120,12 +121,12 @@ do
 done
 
 echo
-echo "✅ AWG install finished"
+echo "✅ AWG installation finished"
 
 if [ "$INST_KMOD" -eq 1 ] &&
    [ "$INST_TOOLS" -eq 1 ] &&
    [ "$INST_LUCI" -eq 1 ]; then
     echo
-    echo "⚠ Reboot required:"
+    echo "⚠ Reboot required to apply changes"
     echo "reboot"
 fi
