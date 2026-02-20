@@ -1,20 +1,17 @@
 #!/bin/sh
 set -e
 
-REPO="samara15321/awg2"
+REPO="samara1531/awg2"
 API="https://api.github.com/repos/$REPO/releases?per_page=100"
 TMP="/tmp/awg"
-
 mkdir -p "$TMP"
-cd "$TMP"
+cd "$TMP" || exit 1
 
 # --- OpenWrt info ---
 . /etc/openwrt_release
-
 REL="$DISTRIB_RELEASE"
 TARGET="$DISTRIB_TARGET"
 TARGET_DASH="$(echo "$TARGET" | tr '/' '-')"
-
 echo "[*] OpenWrt release: $REL"
 echo "[*] Target: $TARGET"
 
@@ -25,10 +22,19 @@ if ! wget -qO releases.json "$API"; then
   exit 1
 fi
 
-# --- strict ZIP lookup: tag + target ---
-ZIP_URL="$(grep -o \
-  "https://github.com/$REPO/releases/download/$REL/[^\" ]*$TARGET_DASH[^\" ]*\.zip" \
-  releases.json | head -n1)"
+# --- strict ZIP lookup ---
+ZIP_URL=""
+while IFS= read -r line; do
+  case "$line" in
+    *"https://github.com/$REPO/releases/download/$REL/"*"${TARGET_DASH}"*".zip"*)
+      ZIP_URL="$line"
+      break
+      ;;
+  esac
+done < releases.json
+
+# убираем лишние кавычки, если они попали
+ZIP_URL=$(echo "$ZIP_URL" | tr -d '"' | tr -d ' ')
 
 if [ -z "$ZIP_URL" ]; then
   echo "❌ No matching build for $REL / $TARGET"
@@ -74,7 +80,7 @@ fi
 
 echo "[*] Installing packages via $PM"
 
-# --- install packages with reboot check ---
+# --- install packages ---
 INST_KMOD=0
 INST_TOOLS=0
 INST_LUCI=0
@@ -85,7 +91,14 @@ for pkg in \
   luci-proto-amneziawg \
   luci-i18n-amneziawg-ru
 do
-  FILE="$(ls 2>/dev/null | grep "^$pkg-.*\.$PM$" | head -n1)"
+  FILE=""
+  for f in "${pkg}"-*."${PM}"; do
+    if [ -f "$f" ]; then
+      FILE="$f"
+      break
+    fi
+  done
+
   if [ -z "$FILE" ]; then
     echo "⚠ $pkg not found"
     continue
@@ -99,15 +112,14 @@ do
   fi
 
   case "$pkg" in
-    kmod-amneziawg) INST_KMOD=1 ;;
-    amneziawg-tools) INST_TOOLS=1 ;;
+    kmod-amneziawg)   INST_KMOD=1 ;;
+    amneziawg-tools)  INST_TOOLS=1 ;;
     luci-proto-amneziawg) INST_LUCI=1 ;;
   esac
 done
 
 echo "✅ AWG install finished"
 
-# --- если все три основных пакета установлены, предупреждаем о перезагрузке ---
 if [ "$INST_KMOD" -eq 1 ] && [ "$INST_TOOLS" -eq 1 ] && [ "$INST_LUCI" -eq 1 ]; then
   echo
   echo "⚠ Для применения изменений требуется перезагрузка роутера"
