@@ -21,8 +21,6 @@ GO_PKG:=github.com/amnezia-vpn/amneziawg-go
 GO_PKG_LDFLAGS_X:=\
 	main.Build=$(PKG_VERSION)
 
-GO_PKG_BUILD_FLAGS := -ldflags "-s -w -buildid=" CGO_ENABLED=0
-
 include $(INCLUDE_DIR)/package.mk
 include ../../packages/lang/golang/golang-package.mk
 
@@ -34,8 +32,7 @@ define Package/amneziawg-go
 endef
 
 define Build/Compile
-  export CGO_ENABLED=0
-  $(call GoPackage/Build/Compile, -ldflags "-s -w -buildid= -X main.Build=$(PKG_VERSION)")
+  $(call GoPackage/Build/Compile)
 endef
 
 define Package/amneziawg-go/description
