@@ -104,6 +104,7 @@ jobs:
 
         # Подключаем feed для AmneziaWG
         echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
+
         # --- повторное обновление feed с паузами ---
         MAX_ATTEMPTS=20
         attempt=1
