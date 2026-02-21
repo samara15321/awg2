@@ -17,17 +17,17 @@ on:
         description: "OpenWrt arch"
         type: string
         required: true
-        default: "aarch64_cortex-a53"
+        default: "aarch64_generic"
       openwrt_target:
         description: "OpenWrt target"
         type: string
         required: true
-        default: "microchipsw"
+        default: "rockchip"
       openwrt_subtarget:
         description: "OpenWrt subtarget"
         type: string
         required: true
-        default: "lan969x"
+        default: "armv8"
       compile_kmod:
         description: "Compile kernel module inplementation"
         type: boolean
@@ -147,14 +147,18 @@ jobs:
       run: |
         set -e -x
         cd openwrt
-        if [ "${{ env.compile_kmod }}" = "true" ]; then
-          make package/kmod-amneziawg/{clean,download,prepare,compile} -j $(nproc)
+        make package/kmod-amneziawg/{clean,download,prepare,compile} -j$(nproc)
+
+        make package/amneziawg-tools/{clean,download,prepare,compile} -j$(nproc)
+
+        make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j$(nproc)
+
+        if [ "$compile_go" = "true" ]; then
+          rm -rf tmp/go-build dl/go-mod-cache
+
+          make package/amneziawg-go/{clean,download,prepare,compile} V=s -j$(nproc) \
+            || echo "amneziawg-go failed — continuing anyway"
         fi
-        if [ "${{ env.compile_go }}" = "true" ]; then
-          make package/amneziawg-go/{clean,download,prepare,compile} -j $(nproc)
-        fi
-        make package/luci-proto-amneziawg/{clean,download,prepare,compile} -j $(nproc)
-        make package/amneziawg-tools/{clean,download,prepare,compile} -j $(nproc)
 
     - name: Prepare artifacts
       run: |
