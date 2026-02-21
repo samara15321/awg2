@@ -161,18 +161,15 @@ jobs:
     - name: Prepare artifacts
       run: |
         set -e -x
-        mkdir awgrelease
+        mkdir -p awgrelease
         find "openwrt/bin/targets/${{ inputs.openwrt_target }}/${{ inputs.openwrt_subtarget }}/packages" \
           -type f -name '*amneziawg*' -exec cp {} awgrelease/ \; 2>/dev/null || true
 
         find "openwrt/bin/packages" \
           -type f -name '*amneziawg*' -exec cp {} awgrelease/ \; 2>/dev/null || true
-
-    - name: Create zip
-      run: zip -r immortal-amneziawg-${{ inputs.openwrt_version }}_${{ inputs.openwrt_arch }}_${{ inputs.openwrt_target }}_${{ inputs.openwrt_subtarget }}.zip awgrelease/
   
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: immortal-amneziawg-${{ inputs.openwrt_version }}_${{ inputs.openwrt_arch }}_${{ inputs.openwrt_target }}_${{ inputs.openwrt_subtarget }}
-        path: immortal-amneziawg-*.zip
+        name: immortal-amneziawg-${{ inputs.openwrt_version }}_${{ inputs.openwrt_arch }}_${{ inputs.openwrt_target }}_${{ inputs.openwrt_subtarget }}.zip
+        path: awgrelease/
