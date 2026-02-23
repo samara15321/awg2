@@ -7,7 +7,7 @@ if (!version) {
   process.exit(1);
 }
 
-// Список зеркал для релизов ImmortalWRT
+// Список зеркал релизов ImmortalWRT
 const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
@@ -16,19 +16,6 @@ const BASE_URLS = [
 
 let baseUrl = null;
 
-// --- Найти рабочее зеркало ---
-async function findWorkingBase() {
-  for (const url of BASE_URLS) {
-    try {
-      await fetchHTML(url);
-      baseUrl = url;
-      return;
-    } catch {}
-  }
-  console.error("No working base URL found.");
-  process.exit(1);
-}
-
 // --- Фетч HTML с таймаутом и User-Agent ---
 async function fetchHTML(url) {
   const { data } = await axios.get(url, {
@@ -36,7 +23,7 @@ async function fetchHTML(url) {
     headers: { 'User-Agent': 'Mozilla/5.0' },
     maxRedirects: 5
   });
-  return data;
+  return data; // возвращаем как строку
 }
 
 // --- Фетч JSON ---
@@ -49,24 +36,38 @@ async function fetchJSON(url) {
   return data;
 }
 
-// --- Универсальный парсер директорий ---
-function parseDirectoryListing(html) {
-  // Находит все href="…/" и убирает ../
-  return Array.from(html.matchAll(/href="([^"]+?)\/"/g))
-    .map(m => m[1])
-    .filter(href => href !== '../');
+// --- Находим рабочее зеркало ---
+async function findWorkingBase() {
+  for (const url of BASE_URLS) {
+    try {
+      await fetchHTML(url);
+      baseUrl = url;
+      return;
+    } catch {}
+  }
+  console.error("No working base URL found.");
+  process.exit(1);
+}
+
+// --- Парсим директорию через Cheerio ---
+async function parseDirectoryListing(url) {
+  const html = await fetchHTML(url);
+  const $ = cheerio.load(html);
+  return $('a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/') && href !== '../')
+    .map(href => href.replace(/\/$/, ''));
 }
 
 // --- Получаем все targets ---
 async function getTargets() {
-  const html = await fetchHTML(baseUrl);
-  return parseDirectoryListing(html);
+  return parseDirectoryListing(baseUrl);
 }
 
-// --- Получаем все subtargets для target ---
+// --- Получаем все subtargets ---
 async function getSubtargets(target) {
-  const html = await fetchHTML(`${baseUrl}${target}/`);
-  return parseDirectoryListing(html);
+  return parseDirectoryListing(`${baseUrl}${target}/`);
 }
 
 // --- Ручные архитектуры Malta ---
@@ -88,8 +89,45 @@ async function getPkgarch(target, subtarget) {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
   } catch {
-    return ['unknown'];
+    // fallback
   }
+
+  return [await getPkgarchFallback(target, subtarget)];
+}
+
+// --- fallback для старых релизов (.ipk) ---
+async function getPkgarchFallback(target, subtarget) {
+  const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
+  let pkgarch = 'unknown';
+  try {
+    const html = await fetchHTML(packagesUrl);
+    const $ = cheerio.load(html);
+
+    $('a').each((i, el) => {
+      const name = $(el).attr('href');
+      if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
+        const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
+        if (match) {
+          pkgarch = match[1];
+          return false; // break
+        }
+      }
+    });
+
+    if (pkgarch === 'unknown') {
+      $('a').each((i, el) => {
+        const name = $(el).attr('href');
+        if (name && name.startsWith('kernel_')) {
+          const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
+          if (match) {
+            pkgarch = match[1];
+            return false;
+          }
+        }
+      });
+    }
+  } catch {}
+  return pkgarch;
 }
 
 // --- Основная функция ---
@@ -125,7 +163,7 @@ async function main() {
     process.exit(1);
   }
 
-  // --- Вывод для GitHub Actions ---
+  // Вывод в JSON для GitHub Actions
   console.log(JSON.stringify({ include: matrix }));
 }
 
