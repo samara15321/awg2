@@ -7,7 +7,7 @@ if (!version) {
   process.exit(1);
 }
 
-// Зеркала релизов ImmortalWRT
+// Список зеркал для релизов ImmortalWRT
 const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
@@ -29,14 +29,14 @@ async function findWorkingBase() {
   process.exit(1);
 }
 
-// --- Фетч HTML ---
+// --- Фетч HTML с таймаутом и User-Agent ---
 async function fetchHTML(url) {
   const { data } = await axios.get(url, {
     timeout: 20000,
     headers: { 'User-Agent': 'Mozilla/5.0' },
     maxRedirects: 5
   });
-  return cheerio.load(data);
+  return data;
 }
 
 // --- Фетч JSON ---
@@ -49,13 +49,24 @@ async function fetchJSON(url) {
   return data;
 }
 
-// --- Парсинг ссылок ---
-function parseLinks($) {
-  return $('a')
-    .map((i, el) => $(el).attr('href'))
-    .get()
-    .filter(href => href && href.endsWith('/'))
-    .map(href => href.replace(/\/$/, ''));
+// --- Универсальный парсер директорий ---
+function parseDirectoryListing(html) {
+  // Находит все href="…/" и убирает ../
+  return Array.from(html.matchAll(/href="([^"]+?)\/"/g))
+    .map(m => m[1])
+    .filter(href => href !== '../');
+}
+
+// --- Получаем все targets ---
+async function getTargets() {
+  const html = await fetchHTML(baseUrl);
+  return parseDirectoryListing(html);
+}
+
+// --- Получаем все subtargets для target ---
+async function getSubtargets(target) {
+  const html = await fetchHTML(`${baseUrl}${target}/`);
+  return parseDirectoryListing(html);
 }
 
 // --- Ручные архитектуры Malta ---
@@ -66,7 +77,7 @@ const maltaMap = {
   'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
 };
 
-// --- Получаем архитектуры для target/subtarget ---
+// --- Получаем arch для target/subtarget ---
 async function getPkgarch(target, subtarget) {
   if (target === 'malta') return maltaMap[subtarget] || ['unknown'];
 
@@ -76,8 +87,9 @@ async function getPkgarch(target, subtarget) {
     if (json && json.arch_packages) {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
-  } catch {}
-  return ['unknown'];
+  } catch {
+    return ['unknown'];
+  }
 }
 
 // --- Основная функция ---
@@ -85,7 +97,7 @@ async function main() {
   await findWorkingBase();
   console.log('Using base URL:', baseUrl);
 
-  const targets = await parseLinks(await fetchHTML(baseUrl));
+  const targets = await getTargets();
   if (!targets.length) {
     console.error("No targets found on base URL.");
     process.exit(1);
@@ -95,7 +107,7 @@ async function main() {
   const seen = new Set();
 
   for (const target of targets) {
-    const subtargets = await parseLinks(await fetchHTML(`${baseUrl}${target}/`));
+    const subtargets = await getSubtargets(target);
     for (const subtarget of subtargets) {
       const archs = await getPkgarch(target, subtarget);
       for (const pkgarch of archs) {
@@ -113,7 +125,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Вывод для GitHub Actions
+  // --- Вывод для GitHub Actions ---
   console.log(JSON.stringify({ include: matrix }));
 }
 
