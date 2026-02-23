@@ -7,8 +7,6 @@ if (!version) {
   process.exit(1);
 }
 
-const isSnapshot = version.endsWith('SNAPSHOT');
-
 // Массив базовых URL для релизов и snapshot
 const BASE_URLS = isSnapshot
   ? [
@@ -29,96 +27,82 @@ const BASE_URLS = isSnapshot
     ];
 
 async function fetchHTML(url) {
-  const { data } = await axios.get(url, { timeout: 10000 });
+  const { data } = await axios.get(url);
   return cheerio.load(data);
 }
 
 async function fetchJSON(url) {
-  const { data } = await axios.get(url, { timeout: 10000 });
+  const { data } = await axios.get(url);
   return data;
 }
 
-// Пробуем все базовые URL, пока не получится
-async function tryAllBases(fn) {
-  for (const baseUrl of BASE_URLS) {
-    try {
-      return await fn(baseUrl);
-    } catch (err) {
-      // console.warn(`Mirror failed: ${baseUrl}`);
-      continue; // пробуем следующий
-    }
-  }
-  throw new Error('All mirrors failed');
-}
-
-// Получаем список targets
 async function getTargets() {
-  return tryAllBases(async (baseUrl) => {
-    const $ = await fetchHTML(baseUrl);
-    const list = $('table tr td.n a')
-      .map((i, el) => $(el).attr('href'))
-      .get()
-      .filter(href => href && href.endsWith('/'))
-      .map(href => href.slice(0, -1));
-    if (!list.length) throw new Error('No targets found');
-    return list;
-  });
+  const $ = await fetchHTML(baseUrl);
+  return $('table tr td.n a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/'))
+    .map(href => href.slice(0, -1));
 }
 
-// Получаем список subtargets
 async function getSubtargets(target) {
-  return tryAllBases(async (baseUrl) => {
-    const $ = await fetchHTML(`${baseUrl}${target}/`);
-    const list = $('table tr td.n a')
-      .map((i, el) => $(el).attr('href'))
-      .get()
-      .filter(href => href && href.endsWith('/'))
-      .map(href => href.slice(0, -1));
-    if (!list.length) throw new Error('No subtargets found');
-    return list;
-  });
+  const $ = await fetchHTML(`${baseUrl}${target}/`);
+  return $('table tr td.n a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/'))
+    .map(href => href.slice(0, -1));
 }
 
-// Получаем pkgarch
 async function getPkgarch(target, subtarget) {
+  // --- MANUAL MALTA ARCHS ---
   if (target === 'malta') {
-    if (subtarget === 'be' || subtarget === 'le') return 'mipsel_24kc';
-    if (subtarget === 'be64' || subtarget === 'le64') return 'mips64el_octeonplus';
+    const maltaMap = {
+      'be': ['mipsel_24kc', 'mips_24kc'],
+      'le': ['mipsel_24kc'],
+      'be64': ['mips64el_octeonplus', 'mips64_mips64r2'],
+      'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
+    };
+    return maltaMap[subtarget] || ['unknown'];
   }
 
+  // --- Try profiles.json (newer releases, 25.x+) ---
+  const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
-    return await tryAllBases(async (baseUrl) => {
-      const json = await fetchJSON(`${baseUrl}${target}/${subtarget}/profiles.json`);
-      if (json && json.arch_packages) return json.arch_packages;
-      throw new Error('No arch_packages');
-    });
+    const json = await fetchJSON(profilesUrl);
+    if (json && json.arch_packages) 
+      return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
   } catch {
-    return await getPkgarchFallback(target, subtarget);
+    // profiles.json not found, fallback
   }
+
+  // --- Fallback: parse .ipk packages (old releases) ---
+  return [await getPkgarchFallback(target, subtarget)];
 }
 
-// Фоллбек через парсинг packages/
 async function getPkgarchFallback(target, subtarget) {
+  const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
+  try {
+    const $ = await fetchHTML(packagesUrl);
 
-  await tryAllBases(async (baseUrl) => {
-    const $ = await fetchHTML(`${baseUrl}${target}/${subtarget}/packages/`);
-
+    // ищем первый не-kernel .ipk (обычно правильный arch)
     $('a').each((i, el) => {
       const name = $(el).attr('href');
       if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
         const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
         if (match) {
           pkgarch = match[1];
-          return false;
+          return false; // break
         }
       }
     });
 
+    // fallback: если ничего не нашли, пробуем kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
-        if (name && name.startsWith('kernel_') && name.endsWith('.ipk')) {
+        if (name && name.startsWith('kernel_')) {
           const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
           if (match) {
             pkgarch = match[1];
@@ -127,28 +111,31 @@ async function getPkgarchFallback(target, subtarget) {
         }
       });
     }
-
-    if (pkgarch === 'unknown') throw new Error('pkgarch not found');
-    return pkgarch;
-  });
-
+  } catch {}
   return pkgarch;
 }
 
-// Основная функция
 async function main() {
   try {
     const targets = await getTargets();
     const matrix = [];
+    const seen = new Set();
 
     for (const target of targets) {
       const subtargets = await getSubtargets(target);
       for (const subtarget of subtargets) {
-        const pkgarch = await getPkgarch(target, subtarget);
-        matrix.push({ target, subtarget, pkgarch });
+        const archs = await getPkgarch(target, subtarget);
+        for (const pkgarch of archs) {
+          const key = `${target}|${subtarget}|${pkgarch}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            matrix.push({ target, subtarget, pkgarch });
+          }
+        }
       }
     }
 
+    // вывод для GitHub Actions в одну строку
     console.log(JSON.stringify({ include: matrix }));
   } catch (err) {
     console.error('Error:', err.message || err);
