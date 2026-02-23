@@ -7,7 +7,7 @@ if (!version) {
   process.exit(1);
 }
 
-// Зеркала релизов OpenWrt/ImmortalWRT
+// Зеркала для релизов
 const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
@@ -26,19 +26,6 @@ async function fetchJSON(url) {
   return data;
 }
 
-// Проверка доступного зеркала
-async function findWorkingBase() {
-  for (const url of BASE_URLS) {
-    try {
-      await fetchHTML(url);
-      baseUrl = url;
-      return;
-    } catch {}
-  }
-  console.error("No working base URL found.");
-  process.exit(1);
-}
-
 // Универсальный парсер ссылок
 function parseLinks($) {
   return $('a')
@@ -46,6 +33,21 @@ function parseLinks($) {
     .get()
     .filter(href => href && href.endsWith('/'))
     .map(href => href.replace(/\/$/, ''));
+}
+
+// Находим рабочее зеркало
+async function findWorkingBase() {
+  for (const url of BASE_URLS) {
+    try {
+      await fetchHTML(url);
+      baseUrl = url;
+      return;
+    } catch (err) {
+      continue;
+    }
+  }
+  console.error("No working base URL found.");
+  process.exit(1);
 }
 
 async function getTargets() {
@@ -58,7 +60,7 @@ async function getSubtargets(target) {
   return parseLinks($);
 }
 
-// --- ручные архитектуры Malta ---
+// Ручные архитектуры Malta
 const maltaMap = {
   'be': ['mipsel_24kc', 'mips_24kc'],
   'le': ['mipsel_24kc'],
@@ -71,7 +73,7 @@ async function getPkgarch(target, subtarget) {
     return maltaMap[subtarget] || ['unknown'];
   }
 
-  // Попытка получить из profiles.json (новые релизы)
+  // profiles.json (новые релизы)
   const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
     const json = await fetchJSON(profilesUrl);
@@ -79,7 +81,7 @@ async function getPkgarch(target, subtarget) {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
   } catch {
-    // fallback на парсинг .ipk
+    // fallback
   }
 
   return [await getPkgarchFallback(target, subtarget)];
@@ -91,6 +93,7 @@ async function getPkgarchFallback(target, subtarget) {
   try {
     const $ = await fetchHTML(packagesUrl);
 
+    // ищем первый не-kernel .ipk
     $('a').each((i, el) => {
       const name = $(el).attr('href');
       if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
@@ -102,6 +105,7 @@ async function getPkgarchFallback(target, subtarget) {
       }
     });
 
+    // fallback: kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
@@ -124,6 +128,11 @@ async function main() {
     console.log('Using base URL:', baseUrl);
 
     const targets = await getTargets();
+    if (!targets.length) {
+      console.error('No targets found on base URL.');
+      process.exit(1);
+    }
+
     const matrix = [];
     const seen = new Set();
 
@@ -141,8 +150,8 @@ async function main() {
       }
     }
 
-    if (matrix.length === 0) {
-      console.error('No targets/subtargets found. Check version or mirrors.');
+    if (!matrix.length) {
+      console.error('No targets/subtargets found to build matrix.');
       process.exit(1);
     }
 
