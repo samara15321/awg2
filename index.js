@@ -1,4 +1,5 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 const version = process.argv[2];
 if (!version) {
@@ -7,34 +8,20 @@ if (!version) {
 }
 
 // Зеркала релизов ImmortalWRT
-const MIRRORS = [
+const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirrors.pku.edu.cn/immortalwrt/releases/${version}/targets/`
 ];
 
-// Top-level targets (фиксированные)
-const TOP_TARGETS = [
-  'ramips', 'rockchip', 'x86', 'mediatek', 'bcm27xx', 'brcm2708',
-  'sunxi', 'mvebu', 'imx6', 'lantiq', 'ath79', 'oxnas', 'ar71xx', 'malta'
-];
-
-// Ручные архитектуры для Malta
-const maltaMap = {
-  'be': ['mipsel_24kc', 'mips_24kc'],
-  'le': ['mipsel_24kc'],
-  'be64': ['mips64el_octeonplus', 'mips64_mips64r2'],
-  'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
-};
-
 let baseUrl = null;
 
 // --- Найти рабочее зеркало ---
-async function findWorkingMirror() {
-  for (const mirror of MIRRORS) {
+async function findWorkingBase() {
+  for (const url of BASE_URLS) {
     try {
-      await axios.head(mirror, { timeout: 10000 });
-      baseUrl = mirror;
+      await fetchHTML(url);
+      baseUrl = url;
       return;
     } catch {}
   }
@@ -42,51 +29,80 @@ async function findWorkingMirror() {
   process.exit(1);
 }
 
-// --- Получить список subtargets из profiles.json ---
-async function getSubtargets(target) {
-  try {
-    const url = `${baseUrl}${target}/profiles.json`;
-    const { data } = await axios.get(url, { timeout: 10000 });
-    return Object.keys(data);
-  } catch {
-    return [];
-  }
+// --- Фетч HTML ---
+async function fetchHTML(url) {
+  const { data } = await axios.get(url, {
+    timeout: 20000,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    maxRedirects: 5
+  });
+  return cheerio.load(data);
 }
 
-// --- Получить архитектуры для target/subtarget ---
-async function getArch(target, subtarget) {
-  if (target === 'malta') {
-    return maltaMap[subtarget] || ['unknown'];
-  }
+// --- Фетч JSON ---
+async function fetchJSON(url) {
+  const { data } = await axios.get(url, {
+    timeout: 20000,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    maxRedirects: 5
+  });
+  return data;
+}
 
+// --- Парсинг ссылок ---
+function parseLinks($) {
+  return $('a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/'))
+    .map(href => href.replace(/\/$/, ''));
+}
+
+// --- Ручные архитектуры Malta ---
+const maltaMap = {
+  'be': ['mipsel_24kc', 'mips_24kc'],
+  'le': ['mipsel_24kc'],
+  'be64': ['mips64el_octeonplus', 'mips64_mips64r2'],
+  'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
+};
+
+// --- Получаем архитектуры для target/subtarget ---
+async function getPkgarch(target, subtarget) {
+  if (target === 'malta') return maltaMap[subtarget] || ['unknown'];
+
+  const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
-    const url = `${baseUrl}${target}/${subtarget}/profiles.json`;
-    const { data } = await axios.get(url, { timeout: 10000 });
-    if (data && data.arch_packages) {
-      return Array.isArray(data.arch_packages) ? data.arch_packages : [data.arch_packages];
+    const json = await fetchJSON(profilesUrl);
+    if (json && json.arch_packages) {
+      return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
-  } catch {
-    return ['unknown'];
-  }
+  } catch {}
+  return ['unknown'];
 }
 
 // --- Основная функция ---
-(async () => {
-  await findWorkingMirror();
+async function main() {
+  await findWorkingBase();
   console.log('Using base URL:', baseUrl);
+
+  const targets = await parseLinks(await fetchHTML(baseUrl));
+  if (!targets.length) {
+    console.error("No targets found on base URL.");
+    process.exit(1);
+  }
 
   const matrix = [];
   const seen = new Set();
 
-  for (const target of TOP_TARGETS) {
-    const subtargets = await getSubtargets(target);
+  for (const target of targets) {
+    const subtargets = await parseLinks(await fetchHTML(`${baseUrl}${target}/`));
     for (const subtarget of subtargets) {
-      const archs = await getArch(target, subtarget);
-      for (const arch of archs) {
-        const key = `${target}|${subtarget}|${arch}`;
+      const archs = await getPkgarch(target, subtarget);
+      for (const pkgarch of archs) {
+        const key = `${target}|${subtarget}|${pkgarch}`;
         if (!seen.has(key)) {
           seen.add(key);
-          matrix.push({ target, subtarget, pkgarch: arch });
+          matrix.push({ target, subtarget, pkgarch });
         }
       }
     }
@@ -97,6 +113,8 @@ async function getArch(target, subtarget) {
     process.exit(1);
   }
 
-  // Вывод в GitHub Actions-friendly формате
+  // Вывод для GitHub Actions
   console.log(JSON.stringify({ include: matrix }));
-})();
+}
+
+main();
