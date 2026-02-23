@@ -7,28 +7,14 @@ if (!version) {
   process.exit(1);
 }
 
-// Используем зеркала релизов (без снапшотов)
-const mirrors = [
+// зеркала релизов
+const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
-  `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
-  `https://mirrors.pku.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirrors.pku.edu.cn/immortalwrt/releases/${version}/targets/`
 ];
 
-let baseUrl = null; // рабочее зеркало будет найдено первым
-async function findWorkingBase() {
-  for (const url of mirrors) {
-    try {
-      await axios.head(url, { timeout: 5000 });
-      baseUrl = url;
-      return;
-    } catch {
-      continue;
-    }
-  }
-  throw new Error('No working base URL found.');
-}
+let baseUrl = null;
 
 async function fetchHTML(url) {
   const { data } = await axios.get(url, { timeout: 10000 });
@@ -40,7 +26,20 @@ async function fetchJSON(url) {
   return data;
 }
 
-// Универсальный парсер ссылок, любые зеркала
+async function findWorkingBase() {
+  for (const url of BASE_URLS) {
+    try {
+      await fetchHTML(url);
+      baseUrl = url;
+      return;
+    } catch (err) {
+      continue;
+    }
+  }
+  console.error("No working base URL found.");
+  process.exit(1);
+}
+
 function parseLinks($) {
   return $('a')
     .map((i, el) => $(el).attr('href'))
@@ -59,7 +58,7 @@ async function getSubtargets(target) {
   return parseLinks($);
 }
 
-// --- ручные архитектуры Malta ---
+// ручные архитектуры Malta
 const maltaMap = {
   'be': ['mipsel_24kc', 'mips_24kc'],
   'le': ['mipsel_24kc'],
@@ -68,11 +67,9 @@ const maltaMap = {
 };
 
 async function getPkgarch(target, subtarget) {
-  if (target === 'malta') {
-    return maltaMap[subtarget] || ['unknown'];
-  }
+  if (target === 'malta') return maltaMap[subtarget] || ['unknown'];
 
-  // profiles.json (новые релизы)
+  // profiles.json для новых релизов
   const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
     const json = await fetchJSON(profilesUrl);
@@ -83,7 +80,6 @@ async function getPkgarch(target, subtarget) {
     // fallback
   }
 
-  // fallback на парсинг пакетов
   return [await getPkgarchFallback(target, subtarget)];
 }
 
@@ -93,7 +89,6 @@ async function getPkgarchFallback(target, subtarget) {
   try {
     const $ = await fetchHTML(packagesUrl);
 
-    // ищем первый не-kernel .ipk
     $('a').each((i, el) => {
       const name = $(el).attr('href');
       if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
@@ -105,7 +100,6 @@ async function getPkgarchFallback(target, subtarget) {
       }
     });
 
-    // fallback: kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
@@ -145,7 +139,6 @@ async function main() {
       }
     }
 
-    // вывод для GitHub Actions
     console.log(JSON.stringify({ include: matrix }));
   } catch (err) {
     console.error('Error:', err.message || err);
