@@ -7,24 +7,27 @@ if (!version) {
   process.exit(1);
 }
 
-// Массив базовых URL для релизов и snapshot
-const BASE_URLS = isSnapshot
-  ? [
-      // releases/<version>-SNAPSHOT
-      `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`,
-      `https://downloads.immortalwrt.org/releases/${version}/targets/`,
-      `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
-      // snapshots/targets
-      'https://immortalwrt.kyarucloud.moe/snapshots/targets/',
-      'https://downloads.immortalwrt.org/snapshots/targets/',
-      'https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/',
-    ]
-  : [
-      // обычные релизы
-      `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`,
-      `https://downloads.immortalwrt.org/releases/${version}/targets/`,
-      `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
-    ];
+// Массив базовых URL релизов
+const BASE_URLS = [
+  `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`,
+  `https://downloads.immortalwrt.org/releases/${version}/targets/`,
+  `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
+];
+
+let baseUrl = null;
+
+// выбираем первый доступный URL
+async function selectBaseUrl() {
+  for (const url of BASE_URLS) {
+    try {
+      await axios.head(url); // проверка доступности
+      baseUrl = url;
+      return;
+    } catch {}
+  }
+  console.error('No working base URL found.');
+  process.exit(1);
+}
 
 async function fetchHTML(url) {
   const { data } = await axios.get(url);
@@ -73,7 +76,7 @@ async function getPkgarch(target, subtarget) {
     if (json && json.arch_packages) 
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
   } catch {
-    // profiles.json not found, fallback
+    // fallback
   }
 
   // --- Fallback: parse .ipk packages (old releases) ---
@@ -116,6 +119,8 @@ async function getPkgarchFallback(target, subtarget) {
 }
 
 async function main() {
+  await selectBaseUrl();
+
   try {
     const targets = await getTargets();
     const matrix = [];
