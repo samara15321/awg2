@@ -1,5 +1,4 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 const version = process.argv[2];
 if (!version) {
@@ -7,70 +6,20 @@ if (!version) {
   process.exit(1);
 }
 
-// --- Фетч HTML с таймаутом и User-Agent ---
-async function fetchHTML(url) {
-  const { data } = await axios.get(url, {
-    timeout: 20000,
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    maxRedirects: 5
-  });
-  return cheerio.load(data);
-}
-
-// --- Фетч JSON ---
-async function fetchJSON(url) {
-  const { data } = await axios.get(url, {
-    timeout: 20000,
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    maxRedirects: 5
-  });
-  return data;
-}
-
-// --- Список зеркал ---
-const BASE_URLS = [
+// Зеркала релизов ImmortalWRT
+const MIRRORS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirrors.pku.edu.cn/immortalwrt/releases/${version}/targets/`
 ];
 
-let baseUrl = null;
+// Top-level targets (фиксированные)
+const TOP_TARGETS = [
+  'ramips', 'rockchip', 'x86', 'mediatek', 'bcm27xx', 'brcm2708',
+  'sunxi', 'mvebu', 'imx6', 'lantiq', 'ath79', 'oxnas', 'ar71xx', 'malta'
+];
 
-// --- Найти рабочее зеркало ---
-async function findWorkingBase() {
-  for (const url of BASE_URLS) {
-    try {
-      await fetchHTML(url);
-      baseUrl = url;
-      return;
-    } catch {}
-  }
-  console.error("No working base URL found.");
-  process.exit(1);
-}
-
-// --- Парсер ссылок <a href=".../"> ---
-function parseLinks($) {
-  return $('a')
-    .map((i, el) => $(el).attr('href'))
-    .get()
-    .filter(href => href && href.endsWith('/'))
-    .map(href => href.replace(/\/$/, ''));
-}
-
-// --- Получить targets ---
-async function getTargets() {
-  const $ = await fetchHTML(baseUrl);
-  return parseLinks($);
-}
-
-// --- Получить subtargets ---
-async function getSubtargets(target) {
-  const $ = await fetchHTML(`${baseUrl}${target}/`);
-  return parseLinks($);
-}
-
-// --- Ручные архитектуры Malta ---
+// Ручные архитектуры для Malta
 const maltaMap = {
   'be': ['mipsel_24kc', 'mips_24kc'],
   'le': ['mipsel_24kc'],
@@ -78,80 +27,66 @@ const maltaMap = {
   'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
 };
 
-// --- Получить архитектуры для target/subtarget ---
-async function getPkgarch(target, subtarget) {
-  if (target === 'malta') return maltaMap[subtarget] || ['unknown'];
+let baseUrl = null;
 
-  // profiles.json
-  const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
-  try {
-    const json = await fetchJSON(profilesUrl);
-    if (json && json.arch_packages) {
-      return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
-    }
-  } catch {}
-
-  // fallback на пакеты
-  return [await getPkgarchFallback(target, subtarget)];
+// --- Найти рабочее зеркало ---
+async function findWorkingMirror() {
+  for (const mirror of MIRRORS) {
+    try {
+      await axios.head(mirror, { timeout: 10000 });
+      baseUrl = mirror;
+      return;
+    } catch {}
+  }
+  console.error("No working base URL found.");
+  process.exit(1);
 }
 
-// --- Фоллбэк по .ipk ---
-async function getPkgarchFallback(target, subtarget) {
-  const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
-  let pkgarch = 'unknown';
+// --- Получить список subtargets из profiles.json ---
+async function getSubtargets(target) {
   try {
-    const $ = await fetchHTML(packagesUrl);
+    const url = `${baseUrl}${target}/profiles.json`;
+    const { data } = await axios.get(url, { timeout: 10000 });
+    return Object.keys(data);
+  } catch {
+    return [];
+  }
+}
 
-    $('a').each((i, el) => {
-      const name = $(el).attr('href');
-      if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
-        const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
-        if (match) {
-          pkgarch = match[1];
-          return false; // break
-        }
-      }
-    });
+// --- Получить архитектуры для target/subtarget ---
+async function getArch(target, subtarget) {
+  if (target === 'malta') {
+    return maltaMap[subtarget] || ['unknown'];
+  }
 
-    if (pkgarch === 'unknown') {
-      $('a').each((i, el) => {
-        const name = $(el).attr('href');
-        if (name && name.startsWith('kernel_')) {
-          const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
-          if (match) {
-            pkgarch = match[1];
-            return false; // break
-          }
-        }
-      });
+  try {
+    const url = `${baseUrl}${target}/${subtarget}/profiles.json`;
+    const { data } = await axios.get(url, { timeout: 10000 });
+    if (data && data.arch_packages) {
+      return Array.isArray(data.arch_packages) ? data.arch_packages : [data.arch_packages];
     }
-  } catch {}
-  return pkgarch;
+  } catch {
+    return ['unknown'];
+  }
 }
 
 // --- Основная функция ---
-async function main() {
-  await findWorkingBase();
+(async () => {
+  await findWorkingMirror();
   console.log('Using base URL:', baseUrl);
-
-  const targets = await getTargets();
-  if (!targets.length) {
-    console.error("No targets found on base URL.");
-    process.exit(1);
-  }
 
   const matrix = [];
   const seen = new Set();
 
-  for (const target of targets) {
+  for (const target of TOP_TARGETS) {
     const subtargets = await getSubtargets(target);
     for (const subtarget of subtargets) {
-      const archs = await getPkgarch(target, subtarget);
-      for (const pkgarch of archs) {
-        const key = `${target}|${subtarget}|${pkgarch}`;
+      const archs = await getArch(target, subtarget);
+      for (const arch of archs) {
+        const key = `${target}|${subtarget}|${arch}`;
         if (!seen.has(key)) {
           seen.add(key);
-          matrix.push({ target, subtarget, pkgarch });
+          matrix.push({ target, subtarget, pkgarch: arch });
         }
       }
     }
@@ -162,8 +97,6 @@ async function main() {
     process.exit(1);
   }
 
-  // --- Вывод для GitHub Actions ---
+  // Вывод в GitHub Actions-friendly формате
   console.log(JSON.stringify({ include: matrix }));
-}
-
-main();
+})();
