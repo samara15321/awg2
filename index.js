@@ -7,7 +7,7 @@ if (!version) {
   process.exit(1);
 }
 
-// Список зеркал для релизов
+// Список зеркал для релизов ImmortalWRT
 const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
@@ -16,7 +16,7 @@ const BASE_URLS = [
 
 let baseUrl = null;
 
-// Пробуем найти рабочее зеркало
+// Ищем рабочее зеркало
 async function findWorkingBase() {
   for (const url of BASE_URLS) {
     try {
@@ -29,18 +29,19 @@ async function findWorkingBase() {
   process.exit(1);
 }
 
-// Функции загрузки HTML и JSON
+// Загрузка HTML с таймаутом
 async function fetchHTML(url) {
   const { data } = await axios.get(url, { timeout: 15000 });
   return cheerio.load(data);
 }
 
+// Загрузка JSON (profiles.json)
 async function fetchJSON(url) {
   const { data } = await axios.get(url, { timeout: 15000 });
   return data;
 }
 
-// Универсальный парсер ссылок <a>
+// Универсальный парсер ссылок <a href="…/">
 function parseLinks($) {
   return $('a')
     .map((i, el) => $(el).attr('href'))
@@ -130,6 +131,11 @@ async function main() {
   console.log('Using base URL:', baseUrl);
 
   const targets = await getTargets();
+  if (!targets.length) {
+    console.error("No targets found on base URL.");
+    process.exit(1);
+  }
+
   const matrix = [];
   const seen = new Set();
 
@@ -147,12 +153,12 @@ async function main() {
     }
   }
 
-  if (matrix.length === 0) {
-    console.error("No targets found on base URL.");
+  if (!matrix.length) {
+    console.error("No architectures found for any target/subtarget.");
     process.exit(1);
   }
 
-  // вывод в одну строку для GitHub Actions
+  // Вывод для GitHub Actions
   console.log(JSON.stringify({ include: matrix }));
 }
 
