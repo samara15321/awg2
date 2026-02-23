@@ -10,6 +10,8 @@ if (!version) {
 // Список зеркал (в порядке приоритета)
 const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
+  `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
+  `https://mirrors.pku.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://downloads.immortalwrt.org/releases/${version}/targets/`,
   `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`
 ];
