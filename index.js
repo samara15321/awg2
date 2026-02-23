@@ -7,33 +7,6 @@ if (!version) {
   process.exit(1);
 }
 
-// Зеркала для релизов ImmortalWRT
-const BASE_URLS = [
-  `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
-  `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
-  `https://mirrors.pku.edu.cn/immortalwrt/releases/${version}/targets/`
-];
-
-let baseUrl = null;
-
-// --- Ищем рабочее зеркало ---
-async function findWorkingBase() {
-  for (const url of BASE_URLS) {
-    try {
-      const $ = await fetchHTML(url);
-      if ($) {
-        baseUrl = url;
-        return;
-      }
-    } catch (err) {
-      // console.error(`Failed ${url}: ${err.message}`);
-      continue;
-    }
-  }
-  console.error("No working base URL found.");
-  process.exit(1);
-}
-
 // --- Фетч HTML с таймаутом и User-Agent ---
 async function fetchHTML(url) {
   const { data } = await axios.get(url, {
@@ -54,7 +27,29 @@ async function fetchJSON(url) {
   return data;
 }
 
-// --- Парсим ссылки <a href="…/"> ---
+// --- Список зеркал ---
+const BASE_URLS = [
+  `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
+  `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
+  `https://mirrors.pku.edu.cn/immortalwrt/releases/${version}/targets/`
+];
+
+let baseUrl = null;
+
+// --- Найти рабочее зеркало ---
+async function findWorkingBase() {
+  for (const url of BASE_URLS) {
+    try {
+      await fetchHTML(url);
+      baseUrl = url;
+      return;
+    } catch {}
+  }
+  console.error("No working base URL found.");
+  process.exit(1);
+}
+
+// --- Парсер ссылок <a href=".../"> ---
 function parseLinks($) {
   return $('a')
     .map((i, el) => $(el).attr('href'))
@@ -63,13 +58,13 @@ function parseLinks($) {
     .map(href => href.replace(/\/$/, ''));
 }
 
-// --- Получаем все targets ---
+// --- Получить targets ---
 async function getTargets() {
   const $ = await fetchHTML(baseUrl);
   return parseLinks($);
 }
 
-// --- Получаем все subtargets ---
+// --- Получить subtargets ---
 async function getSubtargets(target) {
   const $ = await fetchHTML(`${baseUrl}${target}/`);
   return parseLinks($);
@@ -83,24 +78,24 @@ const maltaMap = {
   'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
 };
 
-// --- Получаем arch для target/subtarget ---
+// --- Получить архитектуры для target/subtarget ---
 async function getPkgarch(target, subtarget) {
   if (target === 'malta') return maltaMap[subtarget] || ['unknown'];
 
+  // profiles.json
   const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
     const json = await fetchJSON(profilesUrl);
     if (json && json.arch_packages) {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
-  } catch {
-    // fallback
-  }
+  } catch {}
 
+  // fallback на пакеты
   return [await getPkgarchFallback(target, subtarget)];
 }
 
-// --- fallback для старых релизов (.ipk) ---
+// --- Фоллбэк по .ipk ---
 async function getPkgarchFallback(target, subtarget) {
   const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
@@ -113,7 +108,7 @@ async function getPkgarchFallback(target, subtarget) {
         const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
         if (match) {
           pkgarch = match[1];
-          return false;
+          return false; // break
         }
       }
     });
@@ -125,7 +120,7 @@ async function getPkgarchFallback(target, subtarget) {
           const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
           if (match) {
             pkgarch = match[1];
-            return false;
+            return false; // break
           }
         }
       });
@@ -167,6 +162,7 @@ async function main() {
     process.exit(1);
   }
 
+  // --- Вывод для GitHub Actions ---
   console.log(JSON.stringify({ include: matrix }));
 }
 
