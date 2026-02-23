@@ -1,103 +1,129 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 const version = process.argv[2];
 if (!version) {
-  console.error('Version required');
+  console.error('Version argument is required');
   process.exit(1);
 }
 
-const BASE_URL = `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`;
+const baseUrl = `https://downloads.immortalwrt.org/releases/${version}/targets/`;
 
-async function fetchText(url) {
-  try {
-    const res = await axios.get(url, {
-      timeout: 20000,
-      responseType: 'text',
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      transformResponse: r => r // Важно, чтобы не парсился JSON
-    });
-
-    return typeof res.data === 'string' ? res.data : res.data.toString();
-  } catch (e) {
-    console.warn(`Failed to fetch URL: ${url} (${e.message})`);
-    return ''; // возвращаем пустой текст вместо падения
-  }
+async function fetchHTML(url) {
+  const { data } = await axios.get(url);
+  return cheerio.load(data);
 }
 
-function parseDirs(html) {
-  return [...html.matchAll(/href="([^"?]+\/)"/g)]
-    .map(m => m[1].replace(/\/$/, ''))
-    .filter(n => n !== '../' && !n.startsWith('?') && !n.startsWith('/'));
+async function fetchJSON(url) {
+  const { data } = await axios.get(url);
+  return data;
 }
 
 async function getTargets() {
-  const html = await fetchText(BASE_URL);
-  return parseDirs(html);
+  const $ = await fetchHTML(baseUrl);
+  return $('table tr td.n a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/'))
+    .map(href => href.slice(0, -1));
 }
 
 async function getSubtargets(target) {
-  const html = await fetchText(`${BASE_URL}${target}/`);
-  return parseDirs(html);
+  const $ = await fetchHTML(`${baseUrl}${target}/`);
+  return $('table tr td.n a')
+    .map((i, el) => $(el).attr('href'))
+    .get()
+    .filter(href => href && href.endsWith('/'))
+    .map(href => href.slice(0, -1));
 }
 
-async function getArch(target, subtarget) {
-  const url = `${BASE_URL}${target}/${subtarget}/profiles.json`;
-  try {
-    const { data } = await axios.get(url, {
-      timeout: 20000,
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-
-    if (data.arch_packages) {
-      return Array.isArray(data.arch_packages) ? data.arch_packages : [data.arch_packages];
-    }
-  } catch (e) {
-    console.warn(`profiles.json not found for ${target}/${subtarget}, defaulting to 'unknown'`);
+async function getPkgarch(target, subtarget) {
+  // --- MANUAL MALTA ARCHS ---
+  if (target === 'malta') {
+    const maltaMap = {
+      'be': ['mipsel_24kc', 'mips_24kc'],
+      'le': ['mipsel_24kc'],
+      'be64': ['mips64el_octeonplus', 'mips64_mips64r2'],
+      'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
+    };
+    return maltaMap[subtarget] || ['unknown'];
   }
 
-  return ['unknown'];
+  // --- Try profiles.json (newer releases, 25.x+) ---
+  const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
+  try {
+    const json = await fetchJSON(profilesUrl);
+    if (json && json.arch_packages) 
+      return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
+  } catch {
+    // profiles.json not found, fallback
+  }
+
+  // --- Fallback: parse .ipk packages (old releases) ---
+  return [await getPkgarchFallback(target, subtarget)];
+}
+
+async function getPkgarchFallback(target, subtarget) {
+  const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
+  let pkgarch = 'unknown';
+  try {
+    const $ = await fetchHTML(packagesUrl);
+
+    // ищем первый не-kernel .ipk (обычно правильный arch)
+    $('a').each((i, el) => {
+      const name = $(el).attr('href');
+      if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
+        const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
+        if (match) {
+          pkgarch = match[1];
+          return false; // break
+        }
+      }
+    });
+
+    // fallback: если ничего не нашли, пробуем kernel_*
+    if (pkgarch === 'unknown') {
+      $('a').each((i, el) => {
+        const name = $(el).attr('href');
+        if (name && name.startsWith('kernel_')) {
+          const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
+          if (match) {
+            pkgarch = match[1];
+            return false;
+          }
+        }
+      });
+    }
+  } catch {}
+  return pkgarch;
 }
 
 async function main() {
-  console.log("Using:", BASE_URL);
+  try {
+    const targets = await getTargets();
+    const matrix = [];
+    const seen = new Set();
 
-  const targets = await getTargets();
-  if (!targets.length) {
-    console.error("No targets found on base URL.");
+    for (const target of targets) {
+      const subtargets = await getSubtargets(target);
+      for (const subtarget of subtargets) {
+        const archs = await getPkgarch(target, subtarget);
+        for (const pkgarch of archs) {
+          const key = `${target}|${subtarget}|${pkgarch}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            matrix.push({ target, subtarget, pkgarch });
+          }
+        }
+      }
+    }
+
+    // вывод для GitHub Actions в одну строку
+    console.log(JSON.stringify({ include: matrix }));
+  } catch (err) {
+    console.error('Error:', err.message || err);
     process.exit(1);
   }
-
-  const matrix = [];
-  const seen = new Set();
-
-  for (const t of targets) {
-    const subs = await getSubtargets(t);
-    if (!subs.length) {
-      // Если подпапок нет, создаем запись с пустым subtarget
-      const archs = await getArch(t, '');
-      for (const a of archs) {
-        const key = `${t}|unknown|${a}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          matrix.push({ target: t, subtarget: 'unknown', pkgarch: a });
-        }
-      }
-      continue;
-    }
-
-    for (const s of subs) {
-      const archs = await getArch(t, s);
-      for (const a of archs) {
-        const key = `${t}|${s}|${a}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          matrix.push({ target: t, subtarget: s, pkgarch: a });
-        }
-      }
-    }
-  }
-
-  console.log(JSON.stringify({ include: matrix }, null, 2));
 }
 
 main();
