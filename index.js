@@ -7,7 +7,7 @@ if (!version) {
   process.exit(1);
 }
 
-// Список зеркал для релизов ImmortalWRT
+// Зеркала для релизов ImmortalWRT
 const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
@@ -16,47 +16,60 @@ const BASE_URLS = [
 
 let baseUrl = null;
 
-// Ищем рабочее зеркало
+// --- Ищем рабочее зеркало ---
 async function findWorkingBase() {
   for (const url of BASE_URLS) {
     try {
-      await fetchHTML(url);
-      baseUrl = url;
-      return;
-    } catch {}
+      const $ = await fetchHTML(url);
+      if ($) {
+        baseUrl = url;
+        return;
+      }
+    } catch (err) {
+      // console.error(`Failed ${url}: ${err.message}`);
+      continue;
+    }
   }
   console.error("No working base URL found.");
   process.exit(1);
 }
 
-// Загрузка HTML с таймаутом
+// --- Фетч HTML с таймаутом и User-Agent ---
 async function fetchHTML(url) {
-  const { data } = await axios.get(url, { timeout: 15000 });
+  const { data } = await axios.get(url, {
+    timeout: 20000,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    maxRedirects: 5
+  });
   return cheerio.load(data);
 }
 
-// Загрузка JSON (profiles.json)
+// --- Фетч JSON ---
 async function fetchJSON(url) {
-  const { data } = await axios.get(url, { timeout: 15000 });
+  const { data } = await axios.get(url, {
+    timeout: 20000,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    maxRedirects: 5
+  });
   return data;
 }
 
-// Универсальный парсер ссылок <a href="…/"> с фильтрацией ../
+// --- Парсим ссылки <a href="…/"> ---
 function parseLinks($) {
   return $('a')
     .map((i, el) => $(el).attr('href'))
     .get()
-    .filter(href => href && href.endsWith('/') && href !== '../')
+    .filter(href => href && href.endsWith('/'))
     .map(href => href.replace(/\/$/, ''));
 }
 
-// Получаем все таргеты
+// --- Получаем все targets ---
 async function getTargets() {
   const $ = await fetchHTML(baseUrl);
   return parseLinks($);
 }
 
-// Получаем все субтаргеты
+// --- Получаем все subtargets ---
 async function getSubtargets(target) {
   const $ = await fetchHTML(`${baseUrl}${target}/`);
   return parseLinks($);
@@ -70,13 +83,10 @@ const maltaMap = {
   'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
 };
 
-// Получаем архитектуры для таргета
+// --- Получаем arch для target/subtarget ---
 async function getPkgarch(target, subtarget) {
-  if (target === 'malta') {
-    return maltaMap[subtarget] || ['unknown'];
-  }
+  if (target === 'malta') return maltaMap[subtarget] || ['unknown'];
 
-  // profiles.json для новых релизов
   const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
     const json = await fetchJSON(profilesUrl);
@@ -84,21 +94,19 @@ async function getPkgarch(target, subtarget) {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
   } catch {
-    // fallback на старые релизы
+    // fallback
   }
 
-  // fallback на парсинг .ipk
   return [await getPkgarchFallback(target, subtarget)];
 }
 
-// Парсинг пакетов для старых релизов
+// --- fallback для старых релизов (.ipk) ---
 async function getPkgarchFallback(target, subtarget) {
   const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
   try {
     const $ = await fetchHTML(packagesUrl);
 
-    // ищем первый не-kernel .ipk
     $('a').each((i, el) => {
       const name = $(el).attr('href');
       if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
@@ -110,7 +118,6 @@ async function getPkgarchFallback(target, subtarget) {
       }
     });
 
-    // fallback: kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
@@ -127,7 +134,7 @@ async function getPkgarchFallback(target, subtarget) {
   return pkgarch;
 }
 
-// Основная функция
+// --- Основная функция ---
 async function main() {
   await findWorkingBase();
   console.log('Using base URL:', baseUrl);
@@ -160,7 +167,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Вывод для GitHub Actions
   console.log(JSON.stringify({ include: matrix }));
 }
 
