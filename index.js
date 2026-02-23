@@ -41,12 +41,12 @@ async function fetchJSON(url) {
   return data;
 }
 
-// Универсальный парсер ссылок <a href="…/">
+// Универсальный парсер ссылок <a href="…/"> с фильтрацией ../
 function parseLinks($) {
   return $('a')
     .map((i, el) => $(el).attr('href'))
     .get()
-    .filter(href => href && href.endsWith('/'))
+    .filter(href => href && href.endsWith('/') && href !== '../')
     .map(href => href.replace(/\/$/, ''));
 }
 
@@ -84,7 +84,7 @@ async function getPkgarch(target, subtarget) {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
   } catch {
-    // fallback
+    // fallback на старые релизы
   }
 
   // fallback на парсинг .ipk
@@ -98,6 +98,7 @@ async function getPkgarchFallback(target, subtarget) {
   try {
     const $ = await fetchHTML(packagesUrl);
 
+    // ищем первый не-kernel .ipk
     $('a').each((i, el) => {
       const name = $(el).attr('href');
       if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
@@ -109,6 +110,7 @@ async function getPkgarchFallback(target, subtarget) {
       }
     });
 
+    // fallback: kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
