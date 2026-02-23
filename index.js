@@ -7,7 +7,7 @@ if (!version) {
   process.exit(1);
 }
 
-const baseUrl = `https://downloads.immortalwrt.org/releases/${version}/targets/`;
+const baseUrl = `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`;
 
 async function fetchHTML(url) {
   const { data } = await axios.get(url);
