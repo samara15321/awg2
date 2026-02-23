@@ -7,7 +7,7 @@ if (!version) {
   process.exit(1);
 }
 
-// зеркала релизов
+// Зеркала релизов OpenWrt/ImmortalWRT
 const BASE_URLS = [
   `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
   `https://mirror.nju.edu.cn/immortalwrt/releases/${version}/targets/`,
@@ -26,20 +26,20 @@ async function fetchJSON(url) {
   return data;
 }
 
+// Проверка доступного зеркала
 async function findWorkingBase() {
   for (const url of BASE_URLS) {
     try {
       await fetchHTML(url);
       baseUrl = url;
       return;
-    } catch (err) {
-      continue;
-    }
+    } catch {}
   }
   console.error("No working base URL found.");
   process.exit(1);
 }
 
+// Универсальный парсер ссылок
 function parseLinks($) {
   return $('a')
     .map((i, el) => $(el).attr('href'))
@@ -58,7 +58,7 @@ async function getSubtargets(target) {
   return parseLinks($);
 }
 
-// ручные архитектуры Malta
+// --- ручные архитектуры Malta ---
 const maltaMap = {
   'be': ['mipsel_24kc', 'mips_24kc'],
   'le': ['mipsel_24kc'],
@@ -67,9 +67,11 @@ const maltaMap = {
 };
 
 async function getPkgarch(target, subtarget) {
-  if (target === 'malta') return maltaMap[subtarget] || ['unknown'];
+  if (target === 'malta') {
+    return maltaMap[subtarget] || ['unknown'];
+  }
 
-  // profiles.json для новых релизов
+  // Попытка получить из profiles.json (новые релизы)
   const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
   try {
     const json = await fetchJSON(profilesUrl);
@@ -77,7 +79,7 @@ async function getPkgarch(target, subtarget) {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
     }
   } catch {
-    // fallback
+    // fallback на парсинг .ipk
   }
 
   return [await getPkgarchFallback(target, subtarget)];
@@ -137,6 +139,11 @@ async function main() {
           }
         }
       }
+    }
+
+    if (matrix.length === 0) {
+      console.error('No targets/subtargets found. Check version or mirrors.');
+      process.exit(1);
     }
 
     console.log(JSON.stringify({ include: matrix }));
