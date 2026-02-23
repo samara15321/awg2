@@ -1,8 +1,8 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-// --- Вручную задаем версию ImmortalWrt ---
-const version = '23.05.6'; // <- здесь указываем нужную версию
+// --- Вручную задаем версию ---
+const version = '23.05.6'; // <- здесь указываем подходящую версию
 
 const baseUrl = `https://downloads.openwrt.org/releases/${version}/targets/`;
 
