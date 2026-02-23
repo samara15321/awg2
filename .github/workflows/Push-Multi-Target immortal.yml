@@ -35,9 +35,13 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - name: Install Node.js dependencies
         run: |
-            npm install axios cheerio
+          echo "Cleaning npm cache..."
+          npm cache clean --force
+
+      - name: Install dependencies
+        run: npm install
 
       - name: Generate build matrix
         id: set-matrix
