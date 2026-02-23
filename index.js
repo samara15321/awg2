@@ -7,18 +7,40 @@ if (!version) {
   process.exit(1);
 }
 
-const baseUrl = `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`;
+// Список зеркал (в порядке приоритета)
+const BASE_URLS = [
+  `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`,
+  `https://downloads.immortalwrt.org/releases/${version}/targets/`,
+  `https://immortalwrt.kyarucloud.moe/releases/${version}/targets/`
+];
 
+let baseUrl;
+
+// Находим рабочее зеркало
+async function selectBaseUrl() {
+  for (const url of BASE_URLS) {
+    try {
+      await axios.head(url, { timeout: 10000 }); // проверяем доступность
+      baseUrl = url;
+      return;
+    } catch {}
+  }
+  throw new Error('No working base URL found.');
+}
+
+// Получение HTML с таймаутом 30 сек
 async function fetchHTML(url) {
-  const { data } = await axios.get(url);
+  const { data } = await axios.get(url, { timeout: 30000 });
   return cheerio.load(data);
 }
 
+// Получение JSON с таймаутом 30 сек
 async function fetchJSON(url) {
-  const { data } = await axios.get(url);
+  const { data } = await axios.get(url, { timeout: 30000 });
   return data;
 }
 
+// Получаем список targets
 async function getTargets() {
   const $ = await fetchHTML(baseUrl);
   return $('table tr td.n a')
@@ -28,6 +50,7 @@ async function getTargets() {
     .map(href => href.slice(0, -1));
 }
 
+// Получаем список subtargets
 async function getSubtargets(target) {
   const $ = await fetchHTML(`${baseUrl}${target}/`);
   return $('table tr td.n a')
@@ -37,6 +60,7 @@ async function getSubtargets(target) {
     .map(href => href.slice(0, -1));
 }
 
+// Определяем архитектуры
 async function getPkgarch(target, subtarget) {
   // --- MANUAL MALTA ARCHS ---
   if (target === 'malta') {
@@ -56,13 +80,14 @@ async function getPkgarch(target, subtarget) {
     if (json && json.arch_packages) 
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
   } catch {
-    // profiles.json not found, fallback
+    // profiles.json не найден, fallback
   }
 
-  // --- Fallback: parse .ipk packages (old releases) ---
+  // --- Fallback: parse .ipk packages (старые релизы) ---
   return [await getPkgarchFallback(target, subtarget)];
 }
 
+// Парсим .ipk для определения arch
 async function getPkgarchFallback(target, subtarget) {
   const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
@@ -98,8 +123,11 @@ async function getPkgarchFallback(target, subtarget) {
   return pkgarch;
 }
 
+// Главная функция
 async function main() {
   try {
+    await selectBaseUrl(); // выбираем рабочее зеркало
+
     const targets = await getTargets();
     const matrix = [];
     const seen = new Set();
