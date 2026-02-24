@@ -1,39 +1,42 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-// --- Вручную задаем версию ---
-const version = '25.12.0-rc5'; // <- здесь указываем подходящую версию оф. OpenWrt
+const version = '25.12-SNAPSHOT'; // <- указываем нужную версию
+const baseUrl = `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`;
 
-const baseUrl = `https://downloads.openwrt.org/releases/${version}/targets/`;
-
+// --- fetch HTML с follow redirects (axios сам обрабатывает 301/302) ---
 async function fetchHTML(url) {
   const { data } = await axios.get(url);
   return cheerio.load(data);
 }
 
+// --- fetch JSON ---
 async function fetchJSON(url) {
   const { data } = await axios.get(url);
   return data;
 }
 
+// --- Получаем все таргеты ---
 async function getTargets() {
   const $ = await fetchHTML(baseUrl);
-  return $('table tr td.n a')
+  return $('a')
     .map((i, el) => $(el).attr('href'))
     .get()
     .filter(href => href && href.endsWith('/'))
-    .map(href => href.slice(0, -1));
+    .map(href => href.replace(/\/$/, ''));
 }
 
+// --- Получаем субтаргеты для таргета ---
 async function getSubtargets(target) {
   const $ = await fetchHTML(`${baseUrl}${target}/`);
-  return $('table tr td.n a')
+  return $('a')
     .map((i, el) => $(el).attr('href'))
     .get()
     .filter(href => href && href.endsWith('/'))
-    .map(href => href.slice(0, -1));
+    .map(href => href.replace(/\/$/, ''));
 }
 
+// --- Получаем архитектуру ---
 async function getPkgarch(target, subtarget) {
   const baseTargetUrl = `${baseUrl}${target}/${subtarget}/`;
 
@@ -59,6 +62,7 @@ async function getPkgarch(target, subtarget) {
   return [await getPkgarchFallback(target, subtarget)];
 }
 
+// --- Fallback: парсим пакеты ---
 async function getPkgarchFallback(target, subtarget) {
   const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
@@ -94,6 +98,7 @@ async function getPkgarchFallback(target, subtarget) {
   return pkgarch;
 }
 
+// --- Main ---
 async function main() {
   try {
     const targets = await getTargets();
@@ -115,7 +120,7 @@ async function main() {
     }
 
     // Вывод для GitHub Actions
-    console.log(JSON.stringify({ include: matrix }));
+    console.log(JSON.stringify({ include: matrix }, null, 2));
   } catch (err) {
     console.error('Error:', err.message || err);
     process.exit(1);
