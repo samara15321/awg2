@@ -1,22 +1,21 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const version = '25.12-SNAPSHOT'; // <- указываем нужную версию
+const version = '25.12-SNAPSHOT'; // указываем нужную версию
 const baseUrl = `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`;
 
-// --- fetch HTML с follow redirects (axios сам обрабатывает 301/302) ---
+// --- helpers ---
 async function fetchHTML(url) {
   const { data } = await axios.get(url);
   return cheerio.load(data);
 }
 
-// --- fetch JSON ---
 async function fetchJSON(url) {
   const { data } = await axios.get(url);
   return data;
 }
 
-// --- Получаем все таргеты ---
+// --- get targets ---
 async function getTargets() {
   const $ = await fetchHTML(baseUrl);
   return $('a')
@@ -26,7 +25,7 @@ async function getTargets() {
     .map(href => href.replace(/\/$/, ''));
 }
 
-// --- Получаем субтаргеты для таргета ---
+// --- get subtargets ---
 async function getSubtargets(target) {
   const $ = await fetchHTML(`${baseUrl}${target}/`);
   return $('a')
@@ -36,33 +35,30 @@ async function getSubtargets(target) {
     .map(href => href.replace(/\/$/, ''));
 }
 
-// --- Получаем архитектуру ---
+// --- get pkgarch ---
 async function getPkgarch(target, subtarget) {
   const baseTargetUrl = `${baseUrl}${target}/${subtarget}/`;
 
-  // --- Primary: index.json ---
+  // 1) primary: index.json
   const indexUrl = `${baseTargetUrl}packages/index.json`;
   try {
     const json = await fetchJSON(indexUrl);
-    if (json && typeof json.architecture === 'string') {
-      return [json.architecture];
-    }
+    if (json && typeof json.architecture === 'string') return [json.architecture];
   } catch {}
 
-  // --- Secondary: profiles.json ---
+  // 2) secondary: profiles.json
   const profilesUrl = `${baseTargetUrl}profiles.json`;
   try {
     const json = await fetchJSON(profilesUrl);
-    if (json && typeof json.arch_packages !== 'undefined') {
+    if (json && typeof json.arch_packages !== 'undefined')
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
-    }
   } catch {}
 
-  // --- Fallback: parse .ipk packages ---
+  // 3) fallback: parse .ipk
   return [await getPkgarchFallback(target, subtarget)];
 }
 
-// --- Fallback: парсим пакеты ---
+// --- fallback parsing ---
 async function getPkgarchFallback(target, subtarget) {
   const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
@@ -76,12 +72,12 @@ async function getPkgarchFallback(target, subtarget) {
         const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
         if (match) {
           pkgarch = match[1];
-          return false; // break
+          return false;
         }
       }
     });
 
-    // fallback: если ничего не нашли, пробуем kernel_*
+    // fallback kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
@@ -98,7 +94,7 @@ async function getPkgarchFallback(target, subtarget) {
   return pkgarch;
 }
 
-// --- Main ---
+// --- main ---
 async function main() {
   try {
     const targets = await getTargets();
@@ -119,8 +115,8 @@ async function main() {
       }
     }
 
-    // Вывод для GitHub Actions
-    console.log(JSON.stringify({ include: matrix }, null, 2));
+    // --- GitHub Actions output ---
+    console.log(JSON.stringify({ include: matrix }));
   } catch (err) {
     console.error('Error:', err.message || err);
     process.exit(1);
