@@ -2,7 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 // --- Вручную задаем версию ---
-const version = '23.05.6'; // <- здесь указываем подходящую версию оф. врт
+const version = '25.12.0-rc5'; // <- здесь указываем подходящую версию оф. врт
 
 const baseUrl = `https://downloads.openwrt.org/releases/${version}/targets/`;
 
