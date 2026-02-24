@@ -2,7 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 // --- Вручную задаем версию ---
-const version = '25.12.0-rc5'; // <- здесь указываем подходящую версию оф. врт
+const version = '25.12.0-rc5'; // <- здесь указываем подходящую версию оф. OpenWrt
 
 const baseUrl = `https://downloads.openwrt.org/releases/${version}/targets/`;
 
@@ -35,23 +35,27 @@ async function getSubtargets(target) {
 }
 
 async function getPkgarch(target, subtarget) {
-  if (target === 'malta') {
-    const maltaMap = {
-      'be': ['mipsel_24kc', 'mips_24kc'],
-      'le': ['mipsel_24kc'],
-      'be64': ['mips64el_octeonplus', 'mips64_mips64r2'],
-      'le64': ['mips64el_octeonplus', 'mips64_mips64r2']
-    };
-    return maltaMap[subtarget] || ['unknown'];
-  }
+  const baseTargetUrl = `${baseUrl}${target}/${subtarget}/`;
 
-  const profilesUrl = `${baseUrl}${target}/${subtarget}/profiles.json`;
+  // --- Primary: index.json ---
+  const indexUrl = `${baseTargetUrl}packages/index.json`;
   try {
-    const json = await fetchJSON(profilesUrl);
-    if (json && json.arch_packages) 
-      return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
+    const json = await fetchJSON(indexUrl);
+    if (json && typeof json.architecture === 'string') {
+      return [json.architecture];
+    }
   } catch {}
 
+  // --- Secondary: profiles.json ---
+  const profilesUrl = `${baseTargetUrl}profiles.json`;
+  try {
+    const json = await fetchJSON(profilesUrl);
+    if (json && typeof json.arch_packages !== 'undefined') {
+      return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
+    }
+  } catch {}
+
+  // --- Fallback: parse .ipk packages ---
   return [await getPkgarchFallback(target, subtarget)];
 }
 
@@ -61,17 +65,19 @@ async function getPkgarchFallback(target, subtarget) {
   try {
     const $ = await fetchHTML(packagesUrl);
 
+    // ищем первый не-kernel .ipk
     $('a').each((i, el) => {
       const name = $(el).attr('href');
       if (name && name.endsWith('.ipk') && !name.startsWith('kernel_') && !name.includes('kmod-')) {
         const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
         if (match) {
           pkgarch = match[1];
-          return false;
+          return false; // break
         }
       }
     });
 
+    // fallback: если ничего не нашли, пробуем kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
@@ -108,6 +114,7 @@ async function main() {
       }
     }
 
+    // Вывод для GitHub Actions
     console.log(JSON.stringify({ include: matrix }));
   } catch (err) {
     console.error('Error:', err.message || err);
