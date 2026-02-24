@@ -1,10 +1,11 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const version = '25.12-SNAPSHOT'; // указываем нужную версию
-const baseUrl = `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`;
+// --- Вручную задаем версию ---
+const version = '25.12.0-rc5'; // <- здесь указываем подходящую версию оф. OpenWrt
 
-// --- helpers ---
+const baseUrl = `https://downloads.openwrt.org/releases/${version}/targets/`;
+
 async function fetchHTML(url) {
   const { data } = await axios.get(url);
   return cheerio.load(data);
@@ -15,50 +16,49 @@ async function fetchJSON(url) {
   return data;
 }
 
-// --- get targets ---
 async function getTargets() {
   const $ = await fetchHTML(baseUrl);
-  return $('a')
+  return $('table tr td.n a')
     .map((i, el) => $(el).attr('href'))
     .get()
     .filter(href => href && href.endsWith('/'))
-    .map(href => href.replace(/\/$/, ''));
+    .map(href => href.slice(0, -1));
 }
 
-// --- get subtargets ---
 async function getSubtargets(target) {
   const $ = await fetchHTML(`${baseUrl}${target}/`);
-  return $('a')
+  return $('table tr td.n a')
     .map((i, el) => $(el).attr('href'))
     .get()
     .filter(href => href && href.endsWith('/'))
-    .map(href => href.replace(/\/$/, ''));
+    .map(href => href.slice(0, -1));
 }
 
-// --- get pkgarch ---
 async function getPkgarch(target, subtarget) {
   const baseTargetUrl = `${baseUrl}${target}/${subtarget}/`;
 
-  // 1) primary: index.json
+  // --- Primary: index.json ---
   const indexUrl = `${baseTargetUrl}packages/index.json`;
   try {
     const json = await fetchJSON(indexUrl);
-    if (json && typeof json.architecture === 'string') return [json.architecture];
+    if (json && typeof json.architecture === 'string') {
+      return [json.architecture];
+    }
   } catch {}
 
-  // 2) secondary: profiles.json
+  // --- Secondary: profiles.json ---
   const profilesUrl = `${baseTargetUrl}profiles.json`;
   try {
     const json = await fetchJSON(profilesUrl);
-    if (json && typeof json.arch_packages !== 'undefined')
+    if (json && typeof json.arch_packages !== 'undefined') {
       return Array.isArray(json.arch_packages) ? json.arch_packages : [json.arch_packages];
+    }
   } catch {}
 
-  // 3) fallback: parse .ipk
+  // --- Fallback: parse .ipk packages ---
   return [await getPkgarchFallback(target, subtarget)];
 }
 
-// --- fallback parsing ---
 async function getPkgarchFallback(target, subtarget) {
   const packagesUrl = `${baseUrl}${target}/${subtarget}/packages/`;
   let pkgarch = 'unknown';
@@ -72,12 +72,12 @@ async function getPkgarchFallback(target, subtarget) {
         const match = name.match(/_([a-zA-Z0-9_-]+)\.ipk$/);
         if (match) {
           pkgarch = match[1];
-          return false;
+          return false; // break
         }
       }
     });
 
-    // fallback kernel_*
+    // fallback: если ничего не нашли, пробуем kernel_*
     if (pkgarch === 'unknown') {
       $('a').each((i, el) => {
         const name = $(el).attr('href');
@@ -94,7 +94,6 @@ async function getPkgarchFallback(target, subtarget) {
   return pkgarch;
 }
 
-// --- main ---
 async function main() {
   try {
     const targets = await getTargets();
@@ -115,7 +114,7 @@ async function main() {
       }
     }
 
-    // --- GitHub Actions output ---
+    // Вывод для GitHub Actions
     console.log(JSON.stringify({ include: matrix }));
   } catch (err) {
     console.error('Error:', err.message || err);
