@@ -2,9 +2,9 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 // --- Вручную задаем версию ---
-const version = '25.12.0-rc5'; // <- здесь указываем подходящую версию оф. OpenWrt
+const version = '25.12-SNAPSHOT'; // <- здесь указываем подходящую версию оф. OpenWrt
 
-const baseUrl = `https://downloads.openwrt.org/releases/${version}/targets/`;
+const baseUrl = `https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/${version}/targets/`;
 
 async function fetchHTML(url) {
   const { data } = await axios.get(url);
