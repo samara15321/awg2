@@ -1,4 +1,4 @@
-# AmneziaWG 2.0 [ImmortalWRT](https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/)
+# AmneziaWG 2.0 [ImmortalWRT](https://downloads.immortalwrt.org/)
 
 + На неподдерживаемые архитектуры awg-go не собирается.
   - это архивы размером меньше 1 МБ .
