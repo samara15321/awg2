@@ -79,7 +79,7 @@ jobs:
         VERSION="${{ inputs.openwrt_version }}"
 
         # Базовый URL (только releases, только SJTUG mirror)
-        base_url="https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+        base_url="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
 
         # Ищем SDK
         sdk_url=$(curl -fsSL "${base_url}/" \
