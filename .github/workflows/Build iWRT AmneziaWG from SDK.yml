@@ -17,17 +17,17 @@ on:
         description: "OpenWrt arch"
         type: string
         required: true
-        default: "aarch64_generic"
+        default: "aarch64_cortex-a53"
       openwrt_target:
         description: "OpenWrt target"
         type: string
         required: true
-        default: "rockchip"
+        default: "microchipsw"
       openwrt_subtarget:
         description: "OpenWrt subtarget"
         type: string
         required: true
-        default: "armv8"
+        default: "lan969x"
       compile_kmod:
         description: "Compile kernel module inplementation"
         type: boolean
