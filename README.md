@@ -41,3 +41,5 @@ wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-a
 ```sh
 wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-GO.sh?$(date +%s)" | sh
 ```
+---------------
+[Inspired by](https://github.com/this-username-has-been-taken/amneziawg-openwrt)
