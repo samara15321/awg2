@@ -42,7 +42,7 @@ wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-a
 wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-GO.sh?$(date +%s)" | sh
 ```
 ---------------
-+ Вручную
++ Вручную 25.12.x
   - т.к. не разрешено пока по умолчанию ставить через вэб сторонние пакеты.
   - вам придется каким-то образом закинуть файлы в папку /tmp/ на роутере (через прогу WinSCP)
   - и ставить пакеты командой `apk add --allow-untrusted /tmp/название_файла.apk`
