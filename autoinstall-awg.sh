@@ -62,12 +62,7 @@ wget -qO awg.zip "$ZIP_URL" || {
 
 # --- unpack ---
 unzip -o awg.zip >/dev/null || {
-    echo "❌ unzip не найден или ошибка распаковки"
-    exit 1
-}
-
-cd awgrelease 2>/dev/null || {
-    echo "❌ awgrelease directory missing"
+    echo "❌ unzip не найден или ошибка распаковки. Установи unzip вручную"
     exit 1
 }
 
@@ -79,6 +74,15 @@ elif command -v apk >/dev/null 2>&1; then
 else
     echo "❌ No package manager found"
     exit 1
+fi
+
+# --- обновляем индексы репозиториев ---
+if [ "$PM" = "opkg" ]; then
+    echo "[*] Updating opkg package lists..."
+    opkg update || echo "❌ Failed to update opkg lists, продолжаем"
+else
+    echo "[*] Updating apk package lists..."
+    apk update || echo "❌ Failed to update apk lists, продолжаем"
 fi
 
 echo "[*] Installing packages via $PM"
@@ -93,9 +97,9 @@ for pkg in \
     luci-proto-amneziawg \
     luci-i18n-amneziawg-ru
 do
-    # ищем рекурсивно любой файл, который начинается с имени пакета и за которым идёт _ или -
+    # рекурсивный поиск файла в любой подпапке awgrelease
     FILE="$(find "$TMP" -type f -path "*/awgrelease/*" \( -name "${pkg}_*" -o -name "${pkg}-*" \) | head -n1)"
-    
+
     if [ -z "$FILE" ]; then
         echo "⚠ $pkg not found"
         continue
