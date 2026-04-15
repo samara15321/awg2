@@ -142,7 +142,7 @@ jobs:
 
           BASE="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
 
-          sdk_url=$(curl -fsSL "$BASE" | grep -oP 'immortalwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
+          sdk_url=$(curl --http1.1 -fsSL "$BASE" | grep -oP 'immortalwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
 
           if [[ -z "$sdk_url" ]]; then
             echo "SDK не найден: $BASE" >&2
