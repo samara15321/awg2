@@ -157,7 +157,7 @@ jobs:
             fi
           done
 
-          curl -fsLO --location "${BASE}/${sdk_url}"
+          curl -fL --http1.1 "${found_base}/${sdk_url}" -o "$(basename "$sdk_url")"
           tar -xf $(basename "$sdk_url")
           rm -f *.tar.zst *.tar.xz
           mv openwrt-sdk* openwrt
