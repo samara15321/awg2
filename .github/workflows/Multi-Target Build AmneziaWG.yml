@@ -140,14 +140,10 @@ jobs:
           TARGET="${{ matrix.target }}"
           SUBTARGET="${{ matrix.subtarget }}"
 
-          if [ "$VERSION" = "SNAPSHOT" ]; then
-              BASE="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
-          else
-              BASE="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-          fi
+          BASE="https://downloads.immortalwrt.org/releases/${VERSION}/targets/${TARGET}/${SUBTARGET}"
 
           SDK_FILE=$(curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 "$BASE/" \
-            | grep -oE 'immortalwrt-sdk[^"]+\.(tar\.zst|tar\.xz)' \
+            | grep -oE 'immortalwrt-sdk[^"]+\.tar\.(xz|zst)' \
             | head -n1)
 
           if [ -z "$SDK_FILE" ]; then
@@ -160,7 +156,7 @@ jobs:
 
           tar -xf "$SDK_FILE"
           rm -f *.tar.zst *.tar.xz
-          mv openwrt-sdk* openwrt
+          mv immortalwrt-sdk* openwrt
 
           echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
 
