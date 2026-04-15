@@ -150,15 +150,25 @@ jobs:
           fi
 
           sdk_url=""
+          found_base=""
+
           for BASE in "${MIRRORS[@]}"; do
-            sdk_url=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE" | grep -oP 'openwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
+            sdk_url=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE" \
+              | grep -oP 'openwrt-sdk[^<"]+(tar\.zst|tar\.xz)' \
+              | head -n1)
+
             if [[ -n "$sdk_url" ]]; then
+                found_base="$BASE"
                 break
             fi
           done
 
+          if [[ -z "$sdk_url" ]]; then
+            exit 1
+          fi
+
           curl -fL --http1.1 "${found_base}/${sdk_url}" -o "$(basename "$sdk_url")"
-          tar -xf $(basename "$sdk_url")
+          tar -xf "$(basename "$sdk_url")"
           rm -f *.tar.zst *.tar.xz
           mv openwrt-sdk* openwrt
 
