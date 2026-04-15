@@ -147,7 +147,7 @@ jobs:
           fi
 
           SDK_FILE=$(curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 "$BASE/" \
-            | grep -oE 'openwrt-sdk[^"]+\.(tar\.zst|tar\.xz)' \
+            | grep -oE 'immortalwrt-sdk[^"]+\.(tar\.zst|tar\.xz)' \
             | head -n1)
 
           if [ -z "$SDK_FILE" ]; then
