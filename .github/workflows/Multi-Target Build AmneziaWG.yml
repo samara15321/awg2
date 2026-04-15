@@ -143,15 +143,16 @@ jobs:
           BASE="https://downloads.immortalwrt.org/releases/${VERSION}/targets/${TARGET}/${SUBTARGET}"
 
           ARCHIVE=$(curl -fsSL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 "$BASE/" \
+            | tr -d '\r' \
             | grep -oE 'immortalwrt-sdk[^"]+\.tar\.(xz|zst)' \
-            | head -n1)
+            | head -n1 || true)
 
           if [ -z "$ARCHIVE" ]; then
-            echo "SDK not found at $BASE" >&2
+            echo "SDK not found (listing broken or empty): $BASE" >&2
             exit 1
           fi
 
-          curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 \
+          curl -fL --http1.1 --retry 10 --retry-all-errors --retry-delay 2 \
             "$BASE/$ARCHIVE" -o "$ARCHIVE"
 
           tar -xf "$ARCHIVE"
@@ -159,6 +160,7 @@ jobs:
           mv immortalwrt-sdk* openwrt
 
           echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
+
           MAX_ATTEMPTS=20
           attempt=1
           until ./openwrt/scripts/feeds update -a; do
