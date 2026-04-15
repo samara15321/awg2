@@ -141,9 +141,9 @@ jobs:
           SUBTARGET="${{ matrix.subtarget }}"
 
           MIRRORS=(
+            "https://mirrors.pku.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
             "https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
             "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-            "https://mirrors.pku.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
           )
 
           sdk_url=""
