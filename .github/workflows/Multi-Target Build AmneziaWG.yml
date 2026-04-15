@@ -140,35 +140,24 @@ jobs:
           TARGET="${{ matrix.target }}"
           SUBTARGET="${{ matrix.subtarget }}"
 
-          if [ "$VERSION" = "SNAPSHOT" ]; then
-              MIRRORS=(
-                "https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
-                "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/$TARGET/$SUBTARGET"
-              )
-          else
-              MIRRORS=(
-                "https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-                "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-              )
+          BASE="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+
+          sdk_url=$(curl -fsSL "$BASE" | grep -oP 'immortalwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
+
+          if [[ -z "$sdk_url" ]]; then
+            echo "SDK не найден: $BASE" >&2
+            exit 1
           fi
 
           sdk_url=""
-          sdk_base=""
-
           for BASE in "${MIRRORS[@]}"; do
             sdk_url=$(curl -fsSL "$BASE" | grep -oP 'immortalwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
             if [[ -n "$sdk_url" ]]; then
-                sdk_base="$BASE"
                 break
             fi
           done
 
-          if [[ -z "$sdk_url" ]]; then
-            echo "SDK не найден ни на одном зеркале" >&2
-            exit 1
-          fi
-
-          curl --http1.1 -fL "${sdk_base}/${sdk_url}" -o "$(basename "$sdk_url")"
+          curl -fsLO --location "${BASE}/${sdk_url}"
           tar -xf $(basename "$sdk_url")
           rm -f *.tar.zst *.tar.xz
           mv *sdk-* openwrt
@@ -190,7 +179,7 @@ jobs:
 
           echo "Feeds успешно обновлены"
 
-          curl --http1.1 -fL "$sdk_base/config.buildinfo" > openwrt/.config
+          curl -fsL "$BASE/config.buildinfo" > openwrt/.config
           echo "CONFIG_PACKAGE_kmod-crypto-kpp=y" >> openwrt/.config
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y" >> openwrt/.config
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y" >> openwrt/.config
