@@ -141,38 +141,23 @@ jobs:
           SUBTARGET="${{ matrix.subtarget }}"
 
           if [ "$VERSION" = "SNAPSHOT" ]; then
-              MIRRORS=("https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET")
+              BASE="https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
           else
-              MIRRORS=(
-                "https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-                "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-              )
+              BASE="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
           fi
 
-          sdk_url=""
-          found_base=""
+          SDK_FILE=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE/" \
+            | grep -oE 'openwrt-sdk[^"]+\.(tar\.zst|tar\.xz)' \
+            | head -n1)
 
-          for BASE in "${MIRRORS[@]}"; do
-            html=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE") || continue
-
-            sdk_url=$(echo "$html" \
-              | grep -oP 'openwrt-sdk[^<"]+(tar\.zst|tar\.xz)' \
-              | head -n1)
-
-            if [[ -n "$sdk_url" ]]; then
-              found_base="$BASE"
-              break
-            fi
-          done
-
-          if [[ -z "$sdk_url" ]]; then
+          if [ -z "$SDK_FILE" ]; then
             exit 1
           fi
 
           curl -fL --http1.1 --retry 3 --retry-delay 2 \
-            "${found_base}/${sdk_url}" -o "$(basename "$sdk_url")"
+            "$BASE/$SDK_FILE" -o "$SDK_FILE"
 
-          tar -xf "$(basename "$sdk_url")"
+          tar -xf "$SDK_FILE"
           rm -f *.tar.zst *.tar.xz
           mv openwrt-sdk* openwrt
 
@@ -182,7 +167,7 @@ jobs:
           attempt=1
           until ./openwrt/scripts/feeds update -a; do
             if [ $attempt -ge $MAX_ATTEMPTS ]; then
-              echo "Ошибка: feeds update не удалось после $MAX_ATTEMPTS попыток" >&2
+              echo "feeds update failed" >&2
               exit 1
             fi
             sleep $((10 + RANDOM % 31))
