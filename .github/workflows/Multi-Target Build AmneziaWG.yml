@@ -146,15 +146,16 @@ jobs:
               BASE="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
           fi
 
-          SDK_FILE=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE/" \
+          SDK_FILE=$(curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 "$BASE/" \
             | grep -oE 'openwrt-sdk[^"]+\.(tar\.zst|tar\.xz)' \
             | head -n1)
 
           if [ -z "$SDK_FILE" ]; then
+            echo "SDK not found: $BASE" >&2
             exit 1
           fi
 
-          curl -fL --http1.1 --retry 3 --retry-delay 2 \
+          curl -fL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 \
             "$BASE/$SDK_FILE" -o "$SDK_FILE"
 
           tar -xf "$SDK_FILE"
