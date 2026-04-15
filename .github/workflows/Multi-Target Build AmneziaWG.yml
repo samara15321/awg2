@@ -151,7 +151,7 @@ jobs:
 
           sdk_url=""
           for BASE in "${MIRRORS[@]}"; do
-            sdk_url=$(curl -fsSL "$BASE" | grep -oP 'openwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
+            sdk_url=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE" | grep -oP 'openwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
             if [[ -n "$sdk_url" ]]; then
                 break
             fi
