@@ -140,19 +140,27 @@ jobs:
           TARGET="${{ matrix.target }}"
           SUBTARGET="${{ matrix.subtarget }}"
 
-          BASE="https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
-
-          sdk_url=$(curl --http1.1 -fsSL "$BASE" | grep -oP 'immortalwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
-
-          if [[ -z "$sdk_url" ]]; then
-            echo "SDK не найден: $BASE" >&2
-            exit 1
+          if [ "$VERSION" = "SNAPSHOT" ]; then
+              MIRRORS=("https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET")
+          else
+              MIRRORS=(
+                "https://downloads.immortalwrt.org/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+                "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+              )
           fi
+
+          sdk_url=""
+          for BASE in "${MIRRORS[@]}"; do
+            sdk_url=$(curl -fsSL "$BASE" | grep -oP 'openwrt-sdk[^<"]+(tar\.zst|tar\.xz)' | head -n1)
+            if [[ -n "$sdk_url" ]]; then
+                break
+            fi
+          done
 
           curl -fsLO --location "${BASE}/${sdk_url}"
           tar -xf $(basename "$sdk_url")
           rm -f *.tar.zst *.tar.xz
-          mv *sdk-* openwrt
+          mv openwrt-sdk* openwrt
 
           echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
 
