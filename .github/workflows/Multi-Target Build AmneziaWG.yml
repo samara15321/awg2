@@ -153,13 +153,15 @@ jobs:
           found_base=""
 
           for BASE in "${MIRRORS[@]}"; do
-            sdk_url=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE" \
+            html=$(curl -fL --http1.1 --retry 3 --retry-delay 2 "$BASE") || continue
+
+            sdk_url=$(echo "$html" \
               | grep -oP 'openwrt-sdk[^<"]+(tar\.zst|tar\.xz)' \
               | head -n1)
 
             if [[ -n "$sdk_url" ]]; then
-                found_base="$BASE"
-                break
+              found_base="$BASE"
+              break
             fi
           done
 
@@ -167,14 +169,15 @@ jobs:
             exit 1
           fi
 
-          curl -fL --http1.1 "${found_base}/${sdk_url}" -o "$(basename "$sdk_url")"
+          curl -fL --http1.1 --retry 3 --retry-delay 2 \
+            "${found_base}/${sdk_url}" -o "$(basename "$sdk_url")"
+
           tar -xf "$(basename "$sdk_url")"
           rm -f *.tar.zst *.tar.xz
           mv openwrt-sdk* openwrt
 
           echo "src-cpy awgopenwrt ../amneziawg" >> openwrt/feeds.conf.default
 
-          # --- повторное обновление feed с паузами ---
           MAX_ATTEMPTS=20
           attempt=1
           until ./openwrt/scripts/feeds update -a; do
@@ -182,14 +185,12 @@ jobs:
               echo "Ошибка: feeds update не удалось после $MAX_ATTEMPTS попыток" >&2
               exit 1
             fi
-            echo "feeds update провалился (попытка $attempt/$MAX_ATTEMPTS), ждём 10–40 сек и пробуем снова..."
             sleep $((10 + RANDOM % 31))
             attempt=$((attempt + 1))
           done
 
-          echo "Feeds успешно обновлены"
-
           curl -fsL "$BASE/config.buildinfo" > openwrt/.config
+
           echo "CONFIG_PACKAGE_kmod-crypto-kpp=y" >> openwrt/.config
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y" >> openwrt/.config
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y" >> openwrt/.config
@@ -199,11 +200,11 @@ jobs:
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> openwrt/.config
           echo "CONFIG_PACKAGE_luci-proto-amneziawg=y" >> openwrt/.config
 
-          if [ "${{ env.compile_go }}" = "true" ]; then
+          if [ "${{ inputs.compile_go }}" = "true" ]; then
             rm -rf openwrt/feeds/packages/lang/golang
             cp -r packages/lang/golang openwrt/feeds/packages/lang
           fi
-          
+
           ./openwrt/scripts/feeds install -a
           make -C openwrt defconfig
 
