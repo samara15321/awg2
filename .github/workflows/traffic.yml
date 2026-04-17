@@ -2,7 +2,7 @@ name: Auto_Sync_Traffic
 
 on:
   schedule:
-    - cron: '10 23 */4 * *'
+    - cron: '10 23 */3 * *'
   workflow_dispatch:
 
 jobs:
@@ -11,5 +11,15 @@ jobs:
     steps:
       - name: Fetch and count downloads using jq
         run: |
+            total_downloads=$(curl -s https://api.github.com/repos/samara1531/awg2/releases | jq '[.[] | .assets[]? | .download_count] | add')
+            echo "Total owrt: $total_downloads"
+            total_downloads=$(curl -s https://api.github.com/repos/samara1531/opera-proxy/releases | jq '[.[] | .assets[]? | .download_count] | add')
+            echo "Total opera-proxy: $total_downloads"
+            total_downloads=$(curl -s https://api.github.com/repos/samara1531/luci-app-xray/releases | jq '[.[] | .assets[]? | .download_count] | add')
+            echo "Total luci-xray: $total_downloads"
+            total_downloads=$(curl -s https://api.github.com/repos/samara1531/openwrt-xray/releases | jq '[.[] | .assets[]? | .download_count] | add')
+            echo "Total xray: $total_downloads"
+            total_downloads=$(curl -s https://api.github.com/repos/samara1531/luci-app-https-dns-proxy/releases | jq '[.[] | .assets[]? | .download_count] | add')
+            echo "Total dnsproxy: $total_downloads"
             total_downloads=$(curl -s https://api.github.com/repos/samara15321/awg2/releases | jq '[.[] | .assets[]? | .download_count] | add')
-            echo "Total downloads: $total_downloads"
+            echo "Total imortal: $total_downloads"
