@@ -148,18 +148,25 @@ jobs:
           )
 
           sdk_url=""
+          FOUND_BASE=""
 
           for BASE in "${MIRRORS[@]}"; do
             sdk_url=$(curl -fsSL "$BASE/" \
               | grep -oE 'immortalwrt-sdk[^"]+\.tar\.(xz|zst)' \
-              | head -n1)
+              | head -n1 || true)
 
             if [[ -n "$sdk_url" ]]; then
+              FOUND_BASE="$BASE"
               break
             fi
           done
+          
+          if [[ -z "$sdk_url" ]]; then
+            echo "SDK not found" >&2
+            exit 1
+          fi
 
-          curl -fL --http1.1 "${BASE}/${sdk_url}" -o "$(basename "$sdk_url")"
+          curl -fL --http1.1 "${FOUND_BASE}/${sdk_url}" -o "$(basename "$sdk_url")"
 
           tar -xf "$(basename "$sdk_url")"
           rm -f *.tar.zst *.tar.xz
@@ -178,7 +185,7 @@ jobs:
             attempt=$((attempt + 1))
           done
 
-          curl -fsL "$BASE/config.buildinfo" > openwrt/.config
+          curl -fsL "$FOUND_BASE/config.buildinfo" > openwrt/.config
 
           echo "CONFIG_PACKAGE_kmod-crypto-kpp=y" >> openwrt/.config
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y" >> openwrt/.config
