@@ -86,7 +86,7 @@ jobs:
                 MIRRORS=(
                   "https://downloads.immortalwrt.org/snapshots/targets/$TARGET/$SUBTARGET"
                   "https://mirrors.sjtug.sjtu.edu.cn/immortalwrt/snapshots/targets/$TARGET/$SUBTARGET"
-                  "https://immortalwrt.kyarucloud.moe/releases/$VERSION/targets/$TARGET/$SUBTARGET"
+                  "https://immortalwrt.kyarucloud.moe/snapshots/targets/$TARGET/$SUBTARGET"
                 )
             else
                 MIRRORS=(
@@ -97,10 +97,21 @@ jobs:
             fi
 
             sdk_url=""
+            FOUND_BASE=""
             for BASE_URL in "${MIRRORS[@]}"; do
-                sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1)
-                [ -n "$sdk_url" ] && break
+                echo "Пробуем зеркало: $BASE_URL"
+                sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1 || true)
+                if [ -n "$sdk_url" ]; then
+                   FOUND_BASE="$BASE_URL"
+                   echo "Найден SDK: $sdk_url"
+                   break
+                fi   
             done
+
+            if [ -z "$sdk_url" ]; then
+                echo "Ошибка: не удалось найти SDK ни на одном зеркале" >&2
+                 exit 1
+            fi
 
             curl -fsLO "$BASE_URL/$sdk_url"
             tar -xf "$(basename "$sdk_url")"
