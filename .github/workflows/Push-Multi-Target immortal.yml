@@ -100,12 +100,15 @@ jobs:
             FOUND_BASE=""
             for BASE_URL in "${MIRRORS[@]}"; do
                 echo "Пробуем зеркало: $BASE_URL"
-                sdk_url=$(curl -fsSL "$BASE_URL" | grep -oP 'immortalwrt-sdk[^<"]+\.(tar\.zst|tar\.xz)' | head -n1 || true)
+                sdk_url=$(curl -fsSL "$BASE_URL" \
+                | grep -oE 'immortalwrt-sdk[^<"]+\.(tar\.(xz|zst))' \
+                | head -n1)
+
                 if [ -n "$sdk_url" ]; then
                    FOUND_BASE="$BASE_URL"
                    echo "Найден SDK: $sdk_url"
                    break
-                fi   
+                fi
             done
 
             if [ -z "$sdk_url" ]; then
@@ -113,7 +116,7 @@ jobs:
                  exit 1
             fi
 
-           curl -fsLO "$FOUND_BASE/$sdk_url"
+            curl -fsLO "$FOUND_BASE/$sdk_url"
             tar -xf "$(basename "$sdk_url")"
             rm -f "$(basename "$sdk_url")"
             mv *sdk-* openwrt
