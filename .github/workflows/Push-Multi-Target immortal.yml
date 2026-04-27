@@ -113,7 +113,7 @@ jobs:
                  exit 1
             fi
 
-            curl -fsLO "$BASE_URL/$sdk_url"
+           curl -fsLO "$FOUND_BASE/$sdk_url"
             tar -xf "$(basename "$sdk_url")"
             rm -f "$(basename "$sdk_url")"
             mv *sdk-* openwrt
