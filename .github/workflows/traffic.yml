@@ -19,7 +19,7 @@ jobs:
             echo "Total luci-xray: $total_downloads"
             total_downloads=$(curl -s https://api.github.com/repos/samara1531/openwrt-xray/releases | jq '[.[] | .assets[]? | .download_count] | add')
             echo "Total xray: $total_downloads"
-            total_downloads=$(curl -s https://api.github.com/repos/samara1531/luci-app-https-dns-proxy/releases | jq '[.[] | .assets[]? | .download_count] | add')
+            total_downloads=$(curl -s https://api.github.com/repos/samara1531/luci-app-dnsproxy/releases | jq '[.[] | .assets[]? | .download_count] | add')
             echo "Total dnsproxy: $total_downloads"
             total_downloads=$(curl -s https://api.github.com/repos/samara15321/awg2/releases | jq '[.[] | .assets[]? | .download_count] | add')
             echo "Total imortal: $total_downloads"
