@@ -18,10 +18,19 @@ echo "[*] Detecting OpenWrt..."
 . /etc/openwrt_release
 
 REL="$DISTRIB_RELEASE"
+
+# Для AWG 3.0 используем отдельный release tag только для 24.10.6
+if [ "$REL" = "24.10.6" ]; then
+    RELEASE_TAG="${REL}_v3.0"
+else
+    RELEASE_TAG="$REL"
+fi
+
 TARGET="$DISTRIB_TARGET"
 TARGET_DASH="$(echo "$TARGET" | tr '/' '-')"
 
 echo "[*] OpenWrt release: $REL"
+echo "[*] AWG release tag: $RELEASE_TAG"
 echo "[*] Target: $TARGET"
 
 # --- fetch releases ---
@@ -31,13 +40,13 @@ wget -qO releases.json "$API" || {
     exit 1
 }
 
-# --- find ZIP strictly by release + target ---
+# --- find ZIP strictly by release tag + target ---
 echo "[*] Searching matching build..."
 
 ZIP_URL="$(cat releases.json \
  | tr ',' '\n' \
  | grep browser_download_url \
- | grep "/download/$REL/" \
+ | grep "/download/$RELEASE_TAG/" \
  | grep "$TARGET_DASH" \
  | grep '.zip' \
  | head -n1 \
@@ -45,8 +54,8 @@ ZIP_URL="$(cat releases.json \
 
 if [ -z "$ZIP_URL" ]; then
     echo "❌ No matching build for:"
-    echo "   release: $REL"
-    echo "   target : $TARGET_DASH"
+    echo "   release tag: $RELEASE_TAG"
+    echo "   target     : $TARGET_DASH"
     exit 1
 fi
 
@@ -76,7 +85,7 @@ else
     exit 1
 fi
 
-# --- обновляем индексы репозиториев ---
+# --- update repositories ---
 if [ "$PM" = "opkg" ]; then
     echo "[*] Updating opkg package lists..."
     opkg update || echo "❌ Failed to update opkg lists, продолжаем"
@@ -97,7 +106,6 @@ for pkg in \
     luci-proto-amneziawg \
     luci-i18n-amneziawg-ru
 do
-    # рекурсивный поиск файла в любой подпапке awgrelease
     FILE="$(find "$TMP" -type f -path "*/awgrelease/*" \( -name "${pkg}_*" -o -name "${pkg}-*" \) | head -n1)"
 
     if [ -z "$FILE" ]; then
