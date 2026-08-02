@@ -44,5 +44,6 @@ wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-G
   - и ставить пакеты командой `apk add --allow-untrusted /tmp/название_файла.apk`
   - Либо дать разрешение на установку пакетов и установить их через вэб менеджер:
   - `sed -i 's/action="add"/action="add --allow-untrusted"/' /usr/libexec/package-manager-call`
+  - порядок установки: kmod - tools - luci
 ---------------
 [Inspired by](https://github.com/this-username-has-been-taken/amneziawg-openwrt)
