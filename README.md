@@ -42,5 +42,7 @@ wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-G
   - т.к. не разрешено пока по умолчанию ставить через вэб сторонние пакеты.
   - вам придется каким-то образом закинуть файлы в папку /tmp/ на роутере (через прогу WinSCP)
   - и ставить пакеты командой `apk add --allow-untrusted /tmp/название_файла.apk`
+  - Либо дать разрешение на установку пакетов и установить их через вэб менеджер:
+  - `sed -i 's/action="add"/action="add --allow-untrusted"/' /usr/libexec/package-manager-call`
 ---------------
 [Inspired by](https://github.com/this-username-has-been-taken/amneziawg-openwrt)
