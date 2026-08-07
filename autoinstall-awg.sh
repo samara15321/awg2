@@ -1,6 +1,8 @@
+```sh
 #!/bin/sh
 # AWG auto installer (BusyBox / ash compatible)
-# Работает с SNAPSHOT, строго берёт текущий tag
+# Для 24.10.8 и 23.05.6 использует release tag *_v3.0
+# Для остальных версий используется обычный release tag
 # unzip должен быть установлен вручную
 
 set -e
@@ -18,16 +20,18 @@ echo "[*] Detecting OpenWrt..."
 . /etc/openwrt_release
 
 REL="$DISTRIB_RELEASE"
-
-# Для AWG 3.0 используем отдельный release tag только для 24.10.6
-if [ "$REL" = "24.10.6" ]; then
-    RELEASE_TAG="${REL}_v3.0"
-else
-    RELEASE_TAG="$REL"
-fi
-
 TARGET="$DISTRIB_TARGET"
 TARGET_DASH="$(echo "$TARGET" | tr '/' '-')"
+
+# --- AWG release tag ---
+case "$REL" in
+    24.10.8|23.05.6)
+        RELEASE_TAG="${REL}_v3.0"
+        ;;
+    *)
+        RELEASE_TAG="$REL"
+        ;;
+esac
 
 echo "[*] OpenWrt release: $REL"
 echo "[*] AWG release tag: $RELEASE_TAG"
@@ -35,6 +39,7 @@ echo "[*] Target: $TARGET"
 
 # --- fetch releases ---
 echo "[*] Fetching releases info..."
+
 wget -qO releases.json "$API" || {
     echo "❌ Failed to fetch releases"
     exit 1
@@ -45,10 +50,10 @@ echo "[*] Searching matching build..."
 
 ZIP_URL="$(cat releases.json \
  | tr ',' '\n' \
- | grep browser_download_url \
+ | grep 'browser_download_url' \
  | grep "/download/$RELEASE_TAG/" \
  | grep "$TARGET_DASH" \
- | grep '.zip' \
+ | grep '\.zip' \
  | head -n1 \
  | cut -d'"' -f4)"
 
@@ -64,6 +69,7 @@ echo "    $ZIP_URL"
 
 # --- download ---
 echo "[*] Downloading..."
+
 wget -qO awg.zip "$ZIP_URL" || {
     echo "❌ ZIP download failed"
     exit 1
@@ -106,7 +112,11 @@ for pkg in \
     luci-proto-amneziawg \
     luci-i18n-amneziawg-ru
 do
-    FILE="$(find "$TMP" -type f -path "*/awgrelease/*" \( -name "${pkg}_*" -o -name "${pkg}-*" \) | head -n1)"
+    FILE="$(find "$TMP" \
+        -type f \
+        -path "*/awgrelease/*" \
+        \( -name "${pkg}_*" -o -name "${pkg}-*" \) \
+        | head -n1)"
 
     if [ -z "$FILE" ]; then
         echo "⚠ $pkg not found"
@@ -122,9 +132,15 @@ do
     fi
 
     case "$pkg" in
-        kmod-amneziawg) INST_KMOD=1 ;;
-        amneziawg-tools) INST_TOOLS=1 ;;
-        luci-proto-amneziawg) INST_LUCI=1 ;;
+        kmod-amneziawg)
+            INST_KMOD=1
+            ;;
+        amneziawg-tools)
+            INST_TOOLS=1
+            ;;
+        luci-proto-amneziawg)
+            INST_LUCI=1
+            ;;
     esac
 done
 
@@ -138,3 +154,4 @@ if [ "$INST_KMOD" -eq 1 ] &&
     echo "⚠ Reboot required to apply changes"
     echo "⚠ Для применения изменений требуется перезагрузка роутера"
 fi
+```
