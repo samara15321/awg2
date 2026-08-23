@@ -250,8 +250,8 @@ jobs:
             zip -r "$ZIP_NAME" awgrelease
 
             gh release create "${{ inputs.openwrt_version }}" \
-              --title "Immortal AWG-3.0 - ${{ inputs.openwrt_version }}" \
-              --notes "AmneziaWG 3.0 ImmortalWRT" \
+              --title "Immortal AWG-3.1 - ${{ inputs.openwrt_version }}" \
+              --notes "AmneziaWG 3.1 ImmortalWRT" \
               --repo "${{ github.repository }}" || true
 
             gh release upload "${{ inputs.openwrt_version }}" "$ZIP_NAME" --clobber --repo "${{ github.repository }}"
