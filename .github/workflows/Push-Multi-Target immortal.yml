@@ -66,6 +66,7 @@ jobs:
         with:
           path: packages
           repository: immortalwrt/packages
+          ref: openwrt-25.12
           fetch-depth: 0
 
       - name: Install dependencies
