@@ -96,7 +96,7 @@ jobs:
           # === САМЫЙ НАДЁЖНЫЙ СПОСОБ — через --argjson ===
           FILTERED=$(jq -c --argjson existing "$(printf '%s\n' "${EXISTING[@]}" | jq -R . | jq -s .)" '
             .include |= map(select(
-              "immortal-awg-2-${{ inputs.openwrt_version }}-\(.target)-\(.subtarget)-\(.pkgarch).zip" as $need
+              "immortal-awg-3-${{ inputs.openwrt_version }}-\(.target)-\(.subtarget)-\(.pkgarch).zip" as $need
               | ($existing | index($need)) == null
             ))
           ' <<< "$ORIGINAL")
