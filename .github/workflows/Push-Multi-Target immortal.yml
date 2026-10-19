@@ -35,13 +35,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install Node.js dependencies
-        run: |
-          echo "Cleaning npm cache..."
-          npm cache clean --force
-
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm config set registry https://registry.npmjs.org/
+          npm install axios cheerio @actions/core es-set-tostringtag
 
       - name: Generate build matrix
         id: set-matrix
