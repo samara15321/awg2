@@ -22,7 +22,7 @@ on:
 jobs:
   # 1. Генерируем матрицу целей
   generate-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
