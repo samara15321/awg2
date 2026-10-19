@@ -34,7 +34,9 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install axios cheerio
+        run: |
+          npm config set registry https://registry.npmjs.org/
+          npm install axios cheerio @actions/core es-set-tostringtag
 
       - name: Generate build matrix
         id: set-matrix
