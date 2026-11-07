@@ -33,7 +33,7 @@ wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-a
 apk add unzip
 wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-awg.sh?$(date +%s)" | sh
 ```
-**Вариант с AWG-GO (установите unzip)**
+**Вариант с AWG-GO**
 ```sh
 wget -qO- "https://raw.githubusercontent.com/samara15321/awg2/main/autoinstall-GO.sh?$(date +%s)" | sh
 ```
